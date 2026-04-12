@@ -65,6 +65,7 @@ A status line at the bottom of the panel showing how many of the **4 full-reward
 | `/pjt` | Shorthand for `/preyhunts` |
 | `/preyhunts reset` | Resets all weekly hunt counts to zero |
 | `/preyhunts inspect` | Dumps all immediate children of the EncounterJournal frame to chat (for debugging) |
+| `/preyhunts panelscan` | Deep-dumps all textures and font strings from currently-visible EJ content frames to the persistent log (for atlas research — navigate to the tab you want to scan first) |
 | `/preyhunts suggestinspect` | Deep-dumps the EncounterJournalSuggestFrame region tree to the persistent log (run while on the Suggested Content tab) |
 | `/preyhunts log` | Prints the last 20 entries from the persistent log to chat |
 | `/preyhunts clearlog` | Clears the persistent log |
@@ -87,6 +88,8 @@ If the title matches, the corresponding difficulty counter is incremented and a 
 
 This approach is future-proof — it matches any target name across all four Midnight zones without requiring a hardcoded quest ID list.
 
+The addon also registers `QUEST_ACCEPTED` and `QUEST_REMOVED` events to refresh the **Active Hunt** card whenever a quest is accepted or abandoned, so the card stays current without needing the panel to be reopened.
+
 ---
 
 ## Weekly Reset
@@ -104,7 +107,7 @@ WTF/Account/<YourAccount>/SavedVariables/PreyJournalTab.lua
 ```
 
 Logged events include:
-- Tab open and close (including how many EJ child frames were hidden/restored)
+- Tab open and close
 - Hunt auto-tracking (difficulty, count, cap)
 - Manual count resets
 - Setup lifecycle events (hook registration, setup execution)
@@ -122,25 +125,27 @@ The Adventure Guide (`EncounterJournal`) is loaded on demand in Midnight — it 
 2. `ADDON_LOADED` with arg `Blizzard_EncounterJournal` — legacy path for clients where EJ ships as a separate addon
 3. `PLAYER_ENTERING_WORLD` — final fallback that fires after all addons and FrameXML have initialised
 
-In all cases, setup is **deferred to the first `OnShow` event** on `EncounterJournal`. This is critical because `GetCenter()` on hidden frames returns `0, 0`, which breaks tab position detection. Setup only runs when the EJ is actually visible on screen.
+In all cases, setup is **deferred to the first `OnShow` event** on `EncounterJournal`. Within that handler, execution is further deferred by one tick via `C_Timer.After(0, ...)` so that Blizzard finishes showing and hiding its own tabs before the addon scans for them. Without this deferral, transiently-visible tabs (such as `EncounterJournalLootJournalTab`) can inflate the tab count and cause the Prey Hunts tab to be created at the wrong index. Setup only runs when the EJ is actually visible on screen.
 
 ### Tab Injection
 
-The tab button is created as `EncounterJournalTab{N}` using `PanelTabButtonTemplate`, where `N` is one more than the current highest existing tab. It is positioned with `SetPoint("LEFT", tutorialsTab, "RIGHT", -14, 0)` — the standard WoW tab chaining offset. `PanelTemplates_SetNumTabs` and `PanelTemplates_TabResize` are called to register it with the panel system.
+The tab button is created as `EncounterJournalTab{N}` using `PanelTabButtonTemplate`, where `N` is one more than the count of currently-visible EJ tabs. It is anchored with `SetPoint("LEFT", anchorTab, "RIGHT", 4, 0)`. `PanelTemplates_SetNumTabs` and `PanelTemplates_TabResize` are called to register it with the panel system.
 
-Tab detection scans child buttons of `EncounterJournal` by position (buttons sitting below the frame bottom) and looks for a tab whose text contains "tutorial" to use as the anchor point.
+Tab detection scans child buttons of `EncounterJournal` by position (buttons sitting within 60px of the frame bottom) and sorts them left-to-right. Only **shown** tabs are counted — hidden tabs such as `EncounterJournalLootJournalTab` are excluded. The anchor is the tab whose text contains "tutorial"; if none is found, the rightmost visible tab is used instead; if there are no existing tabs, the button is placed at the EJ bottom-left.
+
+On UI reload, the addon detects previously-created frames via the `PreyJournalTabPanel` global. It verifies the stored tab index against the current visible tab count; if the index is stale (e.g. was created during a transient-tab bug), the old button is discarded and the tab is recreated at the correct position.
 
 ### Content Isolation
 
-When the Prey Hunts tab is selected:
+`preyPanel` is anchored to fill the EJ content area (`TOPLEFT` + `4, -60` to `BOTTOMRIGHT` + `-4, 6` relative to `EncounterJournal`) and runs at frame level `EJ + 50`. Because it sits above Blizzard's content at a higher frame level, no native EJ children need to be hidden — the panel simply overlays them.
 
-1. All currently-visible direct children of `EncounterJournal` are scanned. Children identified as **chrome** (permanent border frames, close button, all tab buttons) are never touched.
-2. Everything else that is currently shown is hidden and stored in `hiddenByUs`.
-3. The `preyPanel` content frame is shown at frame level `EJ + 50`, covering the EJ interior.
+When the Prey Hunts tab is selected (`ShowPreyTab`):
 
-Chrome is identified by frame level (≥ 400 indicates the ornate border overlay frames), by name (`EncounterJournalCloseButton`, `EncounterJournalInset`), and by position (buttons below the frame bottom are tab buttons).
+1. Every visible tab button child of `EncounterJournal` is visually deselected via `PanelTemplates_DeselectTab`.
+2. `preyPanel` is shown and our tab button is selected via `PanelTemplates_SelectTab`.
+3. `wasOnPreyTab` is set to `true` — if the EJ is closed and later reopened, the prey panel is automatically restored on the next `OnShow`.
 
-When any other tab is clicked, `HidePreyTab` fires (hooked via `HookScript` on each existing tab and `hooksecurefunc` on `EncounterJournal_ShowTab`). It hides `preyPanel` and restores every frame in `hiddenByUs`.
+When another tab is selected, `HidePreyTab` fires (hooked via `HookScript` on each existing tab and `hooksecurefunc` on `EncounterJournal_ShowTab`). It hides `preyPanel` and deselects our tab button. When triggered by an explicit click on another tab, `wasOnPreyTab` is also cleared.
 
 ### SavedVariables Schema
 
@@ -152,12 +157,9 @@ PreyJournalDB = {
         Hard      = <0–4>,
         Nightmare = <0–4>,
     },
-    log = {
+    log = {  -- all events including panelscan and suggestinspect output
         "[YYYY-MM-DD HH:MM:SS][CATEGORY] message",
         ...
-    },
-    inspectLog = {  -- populated by /preyhunts suggestinspect
-        "...",
     },
 }
 ```
