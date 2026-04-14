@@ -11,9 +11,10 @@ local ADDON_NAME = "PreyJournalTab"
 -- Constants
 --------------------------------------------------------------------------------
 
-local MAX_HUNTS       = { Normal = 4, Hard = 4, Nightmare = 4 }
-local FULL_REWARD_CAP = 4
-local DIFFICULTIES    = { "Normal", "Hard", "Nightmare" }
+local MAX_HUNTS          = { Normal = 4, Hard = 4, Nightmare = 4 }
+local FULL_REWARD_CAP    = 4
+local DIFFICULTIES       = { "Normal", "Hard", "Nightmare" }
+local NIGHTMARISH_TITLE  = "A Nightmarish Task"
 
 local COLORS = {
     Normal    = { r = 0.4, g = 0.8, b = 0.4 },
@@ -124,10 +125,71 @@ local function ScanQuestLogForActiveHunt()
         local info = C_QuestLog.GetInfo(i)
         if info and not info.isHeader and not info.isTask and info.title then
             local target, diff = ParsePreyTitle(info.title)
-            if target then return target, diff, GetZoneFromTaskQuest() end
+            if target then
+                return target, diff, GetZoneFromTaskQuest(), info.questID
+            end
         end
     end
-    return nil, nil, nil
+    return nil, nil, nil, nil
+end
+
+-- Locate the weekly "A Nightmarish Task" quest in the log.
+local function ScanNightmarishTask()
+    for i = 1, C_QuestLog.GetNumQuestLogEntries() do
+        local info = C_QuestLog.GetInfo(i)
+        if info and not info.isHeader and info.title == NIGHTMARISH_TITLE then
+            local qid        = info.questID
+            local isComplete = C_QuestLog.IsComplete and C_QuestLog.IsComplete(qid)
+            local objectives = (C_QuestLog.GetQuestObjectives
+                                and C_QuestLog.GetQuestObjectives(qid)) or {}
+            return {
+                accepted   = true,
+                questID    = qid,
+                isComplete = isComplete and true or false,
+                objectives = objectives,
+            }
+        end
+    end
+    return { accepted = false }
+end
+
+-- Format a copper value as "Ng Ms Kc" with Blizzard-ish colour tags.
+local function FormatMoney(copper)
+    if not copper or copper <= 0 then return nil end
+    local g = math.floor(copper / 10000)
+    local s = math.floor((copper % 10000) / 100)
+    local c = copper % 100
+    local parts = {}
+    if g > 0 then table.insert(parts, g .. "|cffffd700g|r") end
+    if s > 0 then table.insert(parts, s .. "|cffc7c7cfs|r") end
+    if g == 0 and c > 0 then table.insert(parts, c .. "|cffeda55fc|r") end
+    if #parts == 0 then return nil end
+    return table.concat(parts, " ")
+end
+
+-- Pull item + money rewards for a quest log quest.
+local function GetHuntRewards(questID)
+    if not questID then return {}, 0 end
+    if C_QuestLog and C_QuestLog.RequestLoadQuestByID then
+        -- Rewards can be lazy-loaded; poke the API so the next refresh is populated.
+        C_QuestLog.RequestLoadQuestByID(questID)
+    end
+    local items      = {}
+    local numRewards = (GetNumQuestLogRewards and GetNumQuestLogRewards(questID)) or 0
+    for i = 1, numRewards do
+        local name, texture, quantity, _, _, _, _, _, _, _, quality
+            = GetQuestLogRewardInfo(i, questID)
+        if name then
+            table.insert(items, {
+                name     = name,
+                icon     = texture,
+                quantity = quantity or 1,
+                quality  = quality or 1,
+            })
+        end
+    end
+    local money = (GetQuestLogRewardMoney and GetQuestLogRewardMoney(questID)) or 0
+    return items, money
 end
 
 --------------------------------------------------------------------------------
@@ -137,6 +199,7 @@ end
 local preyPanel       -- content frame parented to EncounterJournal
 local rows            -- difficulty row widget table
 local preyFooterLabel
+local nightmarishLabel  -- weekly "A Nightmarish Task" status line
 local activeSection
 local preyTabButton   -- the tab button we add to EJ
 local preyTabIndex    -- which tab number we are
@@ -148,7 +211,7 @@ local preyTabIndex    -- which tab number we are
 
 local function UpdateActiveHunt()
     if not activeSection then return end
-    local target, diff, zone = ScanQuestLogForActiveHunt()
+    local target, diff, zone, questID = ScanQuestLogForActiveHunt()
     if target and diff then
         local c = COLORS[diff]
         activeSection.targetLabel:SetText(target)
@@ -163,11 +226,65 @@ local function UpdateActiveHunt()
         activeSection.noneLabel:Hide()
         activeSection.targetLabel:Show()
         activeSection.diffLabel:Show()
+
+        -- Rewards line
+        if activeSection.rewardLabel then
+            local items, money = GetHuntRewards(questID)
+            local parts = {}
+            for _, it in ipairs(items) do
+                local q = (it.quantity and it.quantity > 1) and ("x" .. it.quantity) or ""
+                table.insert(parts, "|cffffd700" .. it.name .. q .. "|r")
+            end
+            local moneyStr = FormatMoney(money)
+            if moneyStr then table.insert(parts, moneyStr) end
+            if #parts > 0 then
+                activeSection.rewardLabel:SetText("Reward: " .. table.concat(parts, ", "))
+                activeSection.rewardLabel:Show()
+            else
+                activeSection.rewardLabel:SetText("Reward: |cff888888(loading…)|r")
+                activeSection.rewardLabel:Show()
+            end
+        end
     else
         activeSection.noneLabel:Show()
         activeSection.targetLabel:Hide()
         activeSection.diffLabel:Hide()
         activeSection.zoneLabel:Hide()
+        if activeSection.rewardLabel then activeSection.rewardLabel:Hide() end
+    end
+end
+
+local function UpdateNightmarishTask()
+    if not nightmarishLabel then return end
+    local t = ScanNightmarishTask()
+    if not t.accepted then
+        nightmarishLabel:SetText(
+            "|cffa9a9a9Weekly: " .. NIGHTMARISH_TITLE .. " — not accepted|r")
+        return
+    end
+    if t.isComplete then
+        nightmarishLabel:SetText(
+            "|cff00ff00Weekly: " .. NIGHTMARISH_TITLE .. " — ready to turn in!|r")
+        return
+    end
+    -- Assemble objective progress: "2/4 Nightmare hunts"
+    local bits = {}
+    for _, o in ipairs(t.objectives) do
+        if o and o.text and o.text ~= "" then
+            if o.numRequired and o.numRequired > 0 then
+                table.insert(bits, string.format("%d/%d %s",
+                    o.numFulfilled or 0, o.numRequired, o.text))
+            else
+                table.insert(bits, o.text)
+            end
+        end
+    end
+    if #bits == 0 then
+        nightmarishLabel:SetText(
+            "|cffd8b4feWeekly: " .. NIGHTMARISH_TITLE .. " — in progress|r")
+    else
+        nightmarishLabel:SetText(
+            "|cffd8b4feWeekly:|r " .. table.concat(bits, "  |cff666666·|r  "))
     end
 end
 
@@ -205,6 +322,8 @@ local function UpdateDisplay()
     else
         preyFooterLabel:SetText("|cff00ff00Full weekly rewards claimed!|r")
     end
+
+    UpdateNightmarishTask()
 end
 
 --------------------------------------------------------------------------------
@@ -298,8 +417,18 @@ local function BuildPreyContent(parent)
     zoneLabel:SetTextColor(0.78, 0.70, 0.52)
     zoneLabel:Hide()
 
-    activeSection = { noneLabel = noneLabel, targetLabel = targetLabel,
-                      diffLabel = diffLabel,  zoneLabel   = zoneLabel }
+    local rewardLabel = activeCard:CreateFontString(nil, "OVERLAY")
+    rewardLabel:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
+    rewardLabel:SetJustifyH("LEFT")
+    rewardLabel:SetWordWrap(false)
+    rewardLabel:SetPoint("TOPLEFT",  activeCard, "TOPLEFT",  TX, -80)
+    rewardLabel:SetPoint("TOPRIGHT", activeCard, "TOPRIGHT", -12, -80)
+    rewardLabel:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
+    rewardLabel:Hide()
+
+    activeSection = { noneLabel   = noneLabel,   targetLabel = targetLabel,
+                      diffLabel   = diffLabel,   zoneLabel   = zoneLabel,
+                      rewardLabel = rewardLabel }
 
     -- Divider between active hunt and difficulty row
     local divY = ACTIVE_Y - ACTIVE_H - 8
@@ -380,10 +509,18 @@ local function BuildPreyContent(parent)
 
     preyFooterLabel = footCard:CreateFontString(nil, "OVERLAY")
     preyFooterLabel:SetFont("Fonts\\MORPHEUS.TTF", 14, "")
-    preyFooterLabel:SetPoint("CENTER", footCard, "CENTER", 0, 0)
+    preyFooterLabel:SetPoint("TOP", footCard, "TOP", 0, -22)
     preyFooterLabel:SetJustifyH("CENTER")
     preyFooterLabel:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
     preyFooterLabel:SetShadowColor(0, 0, 0, 0.6) ; preyFooterLabel:SetShadowOffset(1, -1)
+
+    nightmarishLabel = footCard:CreateFontString(nil, "OVERLAY")
+    nightmarishLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+    nightmarishLabel:SetJustifyH("CENTER")
+    nightmarishLabel:SetWordWrap(false)
+    nightmarishLabel:SetPoint("BOTTOMLEFT",  footCard, "BOTTOMLEFT",  12, 16)
+    nightmarishLabel:SetPoint("BOTTOMRIGHT", footCard, "BOTTOMRIGHT", -12, 16)
+    nightmarishLabel:SetShadowColor(0, 0, 0, 0.6) ; nightmarishLabel:SetShadowOffset(1, -1)
 end
 
 --------------------------------------------------------------------------------
@@ -689,6 +826,8 @@ eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("QUEST_TURNED_IN")
 eventFrame:RegisterEvent("QUEST_ACCEPTED")
 eventFrame:RegisterEvent("QUEST_REMOVED")
+eventFrame:RegisterEvent("QUEST_LOG_UPDATE")
+eventFrame:RegisterEvent("QUEST_DATA_LOAD_RESULT")
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" then
@@ -705,9 +844,18 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
 
     elseif event == "QUEST_ACCEPTED" then
         C_Timer.After(0, UpdateActiveHunt)
+        C_Timer.After(0, UpdateNightmarishTask)
 
     elseif event == "QUEST_REMOVED" then
         C_Timer.After(0, UpdateActiveHunt)
+        C_Timer.After(0, UpdateNightmarishTask)
+
+    elseif event == "QUEST_LOG_UPDATE" or event == "QUEST_DATA_LOAD_RESULT" then
+        -- Only refresh if our panel is visible — these events fire often.
+        if preyPanel and preyPanel:IsShown() then
+            UpdateActiveHunt()
+            UpdateNightmarishTask()
+        end
 
     elseif event == "QUEST_TURNED_IN" then
         local diff = GetPreyDifficulty(arg1)
@@ -718,6 +866,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
             PJTLog("QUEST", string.format("Auto-tracked %s hunt (%d/%d)", diff, GetCount(diff), MAX_HUNTS[diff]))
         end
         C_Timer.After(0, UpdateActiveHunt)
+        C_Timer.After(0, UpdateNightmarishTask)
     end
 end)
 
