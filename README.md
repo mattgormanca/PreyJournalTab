@@ -1,6 +1,6 @@
 # PreyJournalTab
 
-**Version:** 1.0.0  
+**Version:** 1.1.0  
 **Interface:** 12.0.0.1 (World of Warcraft: Midnight)  
 **SavedVariables:** `PreyJournalDB`
 
@@ -8,14 +8,21 @@ A World of Warcraft addon that integrates Prey Hunt tracking directly into the A
 
 ---
 
+## Download
+
+Grab the latest packaged addon here:
+
+- [**PreyJournalTab.zip**](PreyJournalTab.zip) — ready-to-install archive
+
 ## Installation
 
-1. Extract the `PreyJournalTab` folder into your addons directory:
+1. Download [**PreyJournalTab.zip**](PreyJournalTab.zip) and extract it.
+2. Copy the resulting `PreyJournalTab` folder into your addons directory:
    ```
    World of Warcraft/_retail_/Interface/AddOns/PreyJournalTab/
    ```
-2. Log in or reload your UI (`/reload`).
-3. Open the Adventure Guide (`J` or via the main menu) — the **Prey Hunts** tab will appear at the far right of the tab bar.
+3. Log in or reload your UI (`/reload`).
+4. Open the Adventure Guide (`J` or via the main menu) — the **Prey Hunts** tab will appear at the far right of the tab bar.
 
 > **Note:** If you also have the **WeeklyTracker** addon installed, use `/preyhunts` to open to this tab directly. Do not use `/prey` — that command belongs to WeeklyTracker.
 
