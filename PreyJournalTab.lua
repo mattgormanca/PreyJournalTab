@@ -15,6 +15,8 @@ local MAX_HUNTS          = { Normal = 4, Hard = 4, Nightmare = 4 }
 local FULL_REWARD_CAP    = 4
 local DIFFICULTIES       = { "Normal", "Hard", "Nightmare" }
 local NIGHTMARISH_TITLE  = "A Nightmarish Task"
+local MIDNIGHT_DELVES_TITLE = "Midnight: Delves"
+local MAX_REWARD_ICONS   = 4
 
 local COLORS = {
     Normal    = { r = 0.4, g = 0.8, b = 0.4 },
@@ -133,6 +135,26 @@ local function ScanQuestLogForActiveHunt()
     return nil, nil, nil, nil
 end
 
+-- Locate the weekly "Midnight: Delves" world quest. World quests are tasks.
+local function ScanMidnightDelves()
+    for i = 1, C_QuestLog.GetNumQuestLogEntries() do
+        local info = C_QuestLog.GetInfo(i)
+        if info and not info.isHeader and info.title == MIDNIGHT_DELVES_TITLE then
+            local qid        = info.questID
+            local isComplete = C_QuestLog.IsComplete and C_QuestLog.IsComplete(qid)
+            local objectives = (C_QuestLog.GetQuestObjectives
+                                and C_QuestLog.GetQuestObjectives(qid)) or {}
+            return {
+                active     = true,
+                questID    = qid,
+                isComplete = isComplete and true or false,
+                objectives = objectives,
+            }
+        end
+    end
+    return { active = false }
+end
+
 -- Locate the weekly "A Nightmarish Task" quest in the log.
 local function ScanNightmarishTask()
     for i = 1, C_QuestLog.GetNumQuestLogEntries() do
@@ -199,7 +221,8 @@ end
 local preyPanel       -- content frame parented to EncounterJournal
 local rows            -- difficulty row widget table
 local preyFooterLabel
-local nightmarishLabel  -- weekly "A Nightmarish Task" status line
+local nightmarishLabel    -- weekly "A Nightmarish Task" status line
+local midnightDelvesLabel -- weekly "Midnight: Delves" world quest status line
 local activeSection
 local preyTabButton   -- the tab button we add to EJ
 local preyTabIndex    -- which tab number we are
@@ -227,22 +250,35 @@ local function UpdateActiveHunt()
         activeSection.targetLabel:Show()
         activeSection.diffLabel:Show()
 
-        -- Rewards line
-        if activeSection.rewardLabel then
+        -- Visual rewards: icons + count overlay, then money text after the last icon.
+        if activeSection.rewardIcons then
             local items, money = GetHuntRewards(questID)
-            local parts = {}
-            for _, it in ipairs(items) do
-                local q = (it.quantity and it.quantity > 1) and ("x" .. it.quantity) or ""
-                table.insert(parts, "|cffffd700" .. it.name .. q .. "|r")
+            for i, slot in ipairs(activeSection.rewardIcons) do
+                local it = items[i]
+                if it and it.icon then
+                    slot.tex:SetTexture(it.icon)
+                    slot.tex:SetVertexColor(1, 1, 1)
+                    if it.quantity and it.quantity > 1 then
+                        slot.count:SetText(it.quantity)
+                    else
+                        slot.count:SetText("")
+                    end
+                    slot:Show()
+                else
+                    slot:Hide()
+                end
             end
             local moneyStr = FormatMoney(money)
-            if moneyStr then table.insert(parts, moneyStr) end
-            if #parts > 0 then
-                activeSection.rewardLabel:SetText("Reward: " .. table.concat(parts, ", "))
-                activeSection.rewardLabel:Show()
+            if moneyStr then
+                activeSection.moneyLabel:SetText(moneyStr)
+                activeSection.moneyLabel:Show()
             else
-                activeSection.rewardLabel:SetText("Reward: |cff888888(loading…)|r")
-                activeSection.rewardLabel:Show()
+                activeSection.moneyLabel:Hide()
+            end
+            -- Fallback: if no rewards found at all, show a hint.
+            if #items == 0 and not moneyStr then
+                activeSection.moneyLabel:SetText("|cff888888(rewards loading…)|r")
+                activeSection.moneyLabel:Show()
             end
         end
     else
@@ -250,7 +286,10 @@ local function UpdateActiveHunt()
         activeSection.targetLabel:Hide()
         activeSection.diffLabel:Hide()
         activeSection.zoneLabel:Hide()
-        if activeSection.rewardLabel then activeSection.rewardLabel:Hide() end
+        if activeSection.rewardIcons then
+            for _, slot in ipairs(activeSection.rewardIcons) do slot:Hide() end
+        end
+        if activeSection.moneyLabel then activeSection.moneyLabel:Hide() end
     end
 end
 
@@ -267,16 +306,12 @@ local function UpdateNightmarishTask()
             "|cff00ff00Weekly: " .. NIGHTMARISH_TITLE .. " — ready to turn in!|r")
         return
     end
-    -- Assemble objective progress: "2/4 Nightmare hunts"
+    -- Blizzard's objective.text already contains "N/M ..." progress, so use it
+    -- verbatim — don't re-prefix or we double the count.
     local bits = {}
     for _, o in ipairs(t.objectives) do
         if o and o.text and o.text ~= "" then
-            if o.numRequired and o.numRequired > 0 then
-                table.insert(bits, string.format("%d/%d %s",
-                    o.numFulfilled or 0, o.numRequired, o.text))
-            else
-                table.insert(bits, o.text)
-            end
+            table.insert(bits, o.text)
         end
     end
     if #bits == 0 then
@@ -285,6 +320,35 @@ local function UpdateNightmarishTask()
     else
         nightmarishLabel:SetText(
             "|cffd8b4feWeekly:|r " .. table.concat(bits, "  |cff666666·|r  "))
+    end
+end
+
+local function UpdateMidnightDelves()
+    if not midnightDelvesLabel then return end
+    local t = ScanMidnightDelves()
+    if not t.active then
+        midnightDelvesLabel:SetText("")
+        midnightDelvesLabel:Hide()
+        return
+    end
+    midnightDelvesLabel:Show()
+    if t.isComplete then
+        midnightDelvesLabel:SetText(
+            "|cff00ff00World Quest: " .. MIDNIGHT_DELVES_TITLE .. " — ready to turn in!|r")
+        return
+    end
+    local bits = {}
+    for _, o in ipairs(t.objectives) do
+        if o and o.text and o.text ~= "" then
+            table.insert(bits, o.text)
+        end
+    end
+    if #bits == 0 then
+        midnightDelvesLabel:SetText(
+            "|cff7ed4ffWQ: " .. MIDNIGHT_DELVES_TITLE .. " — active|r")
+    else
+        midnightDelvesLabel:SetText(
+            "|cff7ed4ffWQ:|r " .. table.concat(bits, "  |cff666666·|r  "))
     end
 end
 
@@ -324,6 +388,7 @@ local function UpdateDisplay()
     end
 
     UpdateNightmarishTask()
+    UpdateMidnightDelves()
 end
 
 --------------------------------------------------------------------------------
@@ -411,24 +476,54 @@ local function BuildPreyContent(parent)
     diffLabel:SetPoint("TOPLEFT", activeCard, "TOPLEFT", TX, -48)
     diffLabel:Hide()
 
+    -- Zone moves inline-right of difficulty so we can stack reward icons under diff.
     local zoneLabel = activeCard:CreateFontString(nil, "OVERLAY")
     zoneLabel:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
-    zoneLabel:SetPoint("TOPLEFT", activeCard, "TOPLEFT", TX, -64)
+    zoneLabel:SetPoint("LEFT", diffLabel, "RIGHT", 10, 0)
     zoneLabel:SetTextColor(0.78, 0.70, 0.52)
     zoneLabel:Hide()
 
-    local rewardLabel = activeCard:CreateFontString(nil, "OVERLAY")
-    rewardLabel:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
-    rewardLabel:SetJustifyH("LEFT")
-    rewardLabel:SetWordWrap(false)
-    rewardLabel:SetPoint("TOPLEFT",  activeCard, "TOPLEFT",  TX, -80)
-    rewardLabel:SetPoint("TOPRIGHT", activeCard, "TOPRIGHT", -12, -80)
-    rewardLabel:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
-    rewardLabel:Hide()
+    -- Visual reward icons row, anchored just under the difficulty label.
+    local ICON_SIZE   = 24
+    local ICON_GAP    = 4
+    local ICON_Y      = -64
+    local rewardIcons = {}
+    for i = 1, MAX_REWARD_ICONS do
+        local slot = CreateFrame("Frame", nil, activeCard)
+        slot:SetSize(ICON_SIZE, ICON_SIZE)
+        slot:SetPoint("TOPLEFT", activeCard, "TOPLEFT",
+                      TX + (i - 1) * (ICON_SIZE + ICON_GAP), ICON_Y)
+
+        local tex = slot:CreateTexture(nil, "ARTWORK")
+        tex:SetAllPoints(slot)
+        tex:SetTexCoord(0.07, 0.93, 0.07, 0.93)  -- trim default item-icon border
+
+        local border = slot:CreateTexture(nil, "OVERLAY")
+        border:SetPoint("TOPLEFT",     slot, "TOPLEFT",     -1, 1)
+        border:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT",  1, -1)
+        border:SetColorTexture(0, 0, 0, 0.6)
+        border:SetDrawLayer("BACKGROUND", -1)
+
+        local count = slot:CreateFontString(nil, "OVERLAY")
+        count:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+        count:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -1, 1)
+        count:SetTextColor(1, 1, 1)
+
+        slot.tex   = tex
+        slot.count = count
+        slot:Hide()
+        rewardIcons[i] = slot
+    end
+
+    local moneyLabel = activeCard:CreateFontString(nil, "OVERLAY")
+    moneyLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+    moneyLabel:SetPoint("LEFT", rewardIcons[MAX_REWARD_ICONS], "RIGHT", 10, 0)
+    moneyLabel:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
+    moneyLabel:Hide()
 
     activeSection = { noneLabel   = noneLabel,   targetLabel = targetLabel,
                       diffLabel   = diffLabel,   zoneLabel   = zoneLabel,
-                      rewardLabel = rewardLabel }
+                      rewardIcons = rewardIcons, moneyLabel  = moneyLabel }
 
     -- Divider between active hunt and difficulty row
     local divY = ACTIVE_Y - ACTIVE_H - 8
@@ -453,17 +548,15 @@ local function BuildPreyContent(parent)
         cardBg:SetAtlas("UI-Journeys-Renown-Button", false)
         cardBg:SetAllPoints(card)
 
-        local tint = card:CreateTexture(nil, "BACKGROUND", nil, 1)
-        tint:SetColorTexture(c.r, c.g, c.b, 0.10)
-        tint:SetAllPoints(card)
-
         local row = {}
 
-        -- Difficulty name: Morpheus 22pt, centered horizontally
+        -- Difficulty name: Morpheus 22pt, centered on the card via CENTER anchor
+        -- so it isn't pushed left by the atlas's asymmetric decoration. Shadow
+        -- removed because it haloed under the coloured text on the new atlas.
         local lbl = card:CreateFontString(nil, "OVERLAY")
         lbl:SetFont("Fonts\\MORPHEUS.TTF", 22, "")
         lbl:SetJustifyH("CENTER")
-        lbl:SetPoint("TOP", card, "TOP", 0, -14)
+        lbl:SetPoint("CENTER", card, "TOP", 0, -24)
         lbl:SetText(diff)
         lbl:SetTextColor(c.r, c.g, c.b)
         --lbl:SetShadowColor(0, 0, 0, 0.7) ; lbl:SetShadowOffset(1, -1)
@@ -509,7 +602,7 @@ local function BuildPreyContent(parent)
 
     preyFooterLabel = footCard:CreateFontString(nil, "OVERLAY")
     preyFooterLabel:SetFont("Fonts\\MORPHEUS.TTF", 14, "")
-    preyFooterLabel:SetPoint("TOP", footCard, "TOP", 0, -22)
+    preyFooterLabel:SetPoint("TOP", footCard, "TOP", 0, -14)
     preyFooterLabel:SetJustifyH("CENTER")
     preyFooterLabel:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
     --preyFooterLabel:SetShadowColor(0, 0, 0, 0.6) ; preyFooterLabel:SetShadowOffset(1, -1)
@@ -518,9 +611,18 @@ local function BuildPreyContent(parent)
     nightmarishLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
     nightmarishLabel:SetJustifyH("CENTER")
     nightmarishLabel:SetWordWrap(false)
-    nightmarishLabel:SetPoint("BOTTOMLEFT",  footCard, "BOTTOMLEFT",  12, 16)
-    nightmarishLabel:SetPoint("BOTTOMRIGHT", footCard, "BOTTOMRIGHT", -12, 16)
+    nightmarishLabel:SetPoint("TOPLEFT",  footCard, "TOPLEFT",  12, -40)
+    nightmarishLabel:SetPoint("TOPRIGHT", footCard, "TOPRIGHT", -12, -40)
     --nightmarishLabel:SetShadowColor(0, 0, 0, 0.6) ; nightmarishLabel:SetShadowOffset(1, -1)
+
+    midnightDelvesLabel = footCard:CreateFontString(nil, "OVERLAY")
+    midnightDelvesLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+    midnightDelvesLabel:SetJustifyH("CENTER")
+    midnightDelvesLabel:SetWordWrap(false)
+    midnightDelvesLabel:SetPoint("BOTTOMLEFT",  footCard, "BOTTOMLEFT",  12, 12)
+    midnightDelvesLabel:SetPoint("BOTTOMRIGHT", footCard, "BOTTOMRIGHT", -12, 12)
+    --midnightDelvesLabel:SetShadowColor(0, 0, 0, 0.6) ; midnightDelvesLabel:SetShadowOffset(1, -1)
+    midnightDelvesLabel:Hide()
 end
 
 --------------------------------------------------------------------------------
@@ -845,16 +947,19 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "QUEST_ACCEPTED" then
         C_Timer.After(0, UpdateActiveHunt)
         C_Timer.After(0, UpdateNightmarishTask)
+        C_Timer.After(0, UpdateMidnightDelves)
 
     elseif event == "QUEST_REMOVED" then
         C_Timer.After(0, UpdateActiveHunt)
         C_Timer.After(0, UpdateNightmarishTask)
+        C_Timer.After(0, UpdateMidnightDelves)
 
     elseif event == "QUEST_LOG_UPDATE" or event == "QUEST_DATA_LOAD_RESULT" then
         -- Only refresh if our panel is visible — these events fire often.
         if preyPanel and preyPanel:IsShown() then
             UpdateActiveHunt()
             UpdateNightmarishTask()
+            UpdateMidnightDelves()
         end
 
     elseif event == "QUEST_TURNED_IN" then
@@ -867,6 +972,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         end
         C_Timer.After(0, UpdateActiveHunt)
         C_Timer.After(0, UpdateNightmarishTask)
+        C_Timer.After(0, UpdateMidnightDelves)
     end
 end)
 

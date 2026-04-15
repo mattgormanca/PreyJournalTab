@@ -2,7 +2,7 @@
 ## Title: PreyJournalTab
 ## Notes: Adds a Prey Hunts tracking tab to the Adventure Guide
 ## Author: Claude
-## Version: 1.1.0
+## Version: 1.2.0
 ## SavedVariables: PreyJournalDB
 
 PreyJournalTab.lua
