@@ -386,7 +386,7 @@ local function BuildPreyContent(parent)
     activeCard:SetPoint("TOPLEFT", parent, "TOPLEFT", PAD, ACTIVE_Y)
 
     local acBg = activeCard:CreateTexture(nil, "BACKGROUND")
-    acBg:SetAtlas("UI-Journeys-Delve-Companion-button", false)
+    acBg:SetAtlas("UI-Journeys-Renown-Button", false)
     acBg:SetAllPoints(activeCard)
 
     local ahLabel = nil -- removed
@@ -403,7 +403,7 @@ local function BuildPreyContent(parent)
     targetLabel:SetJustifyH("LEFT")
     targetLabel:SetPoint("TOPLEFT", activeCard, "TOPLEFT", TX, -22)
     targetLabel:SetTextColor(0.98, 0.92, 0.72)
-    targetLabel:SetShadowColor(0, 0, 0, 0.6) ; targetLabel:SetShadowOffset(1, -1)
+    --targetLabel:SetShadowColor(0, 0, 0, 0.6) ; targetLabel:SetShadowOffset(1, -1)
     targetLabel:Hide()
 
     local diffLabel = activeCard:CreateFontString(nil, "OVERLAY")
@@ -512,7 +512,7 @@ local function BuildPreyContent(parent)
     preyFooterLabel:SetPoint("TOP", footCard, "TOP", 0, -22)
     preyFooterLabel:SetJustifyH("CENTER")
     preyFooterLabel:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
-    preyFooterLabel:SetShadowColor(0, 0, 0, 0.6) ; preyFooterLabel:SetShadowOffset(1, -1)
+    --preyFooterLabel:SetShadowColor(0, 0, 0, 0.6) ; preyFooterLabel:SetShadowOffset(1, -1)
 
     nightmarishLabel = footCard:CreateFontString(nil, "OVERLAY")
     nightmarishLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
@@ -520,7 +520,7 @@ local function BuildPreyContent(parent)
     nightmarishLabel:SetWordWrap(false)
     nightmarishLabel:SetPoint("BOTTOMLEFT",  footCard, "BOTTOMLEFT",  12, 16)
     nightmarishLabel:SetPoint("BOTTOMRIGHT", footCard, "BOTTOMRIGHT", -12, 16)
-    nightmarishLabel:SetShadowColor(0, 0, 0, 0.6) ; nightmarishLabel:SetShadowOffset(1, -1)
+    --nightmarishLabel:SetShadowColor(0, 0, 0, 0.6) ; nightmarishLabel:SetShadowOffset(1, -1)
 end
 
 --------------------------------------------------------------------------------
