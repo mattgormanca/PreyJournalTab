@@ -281,12 +281,12 @@ local function UpdateNightmarishTask()
     local t = ScanNightmarishTask()
     if not t.accepted then
         nightmarishLabel:SetText(
-            "|cffa9a9a9Weekly: " .. NIGHTMARISH_TITLE .. " — not accepted|r")
+            "|cffa9a9a9Astalor Weekly: " .. NIGHTMARISH_TITLE .. " — not accepted|r")
         return
     end
     if t.isComplete then
         nightmarishLabel:SetText(
-            "|cff00ff00Weekly: " .. NIGHTMARISH_TITLE .. " — ready to turn in!|r")
+            "|cff00ff00Astalor Weekly: " .. NIGHTMARISH_TITLE .. " — ready to turn in!|r")
         return
     end
     -- Blizzard's objective.text already contains "N/M ..." progress, so use it
@@ -299,10 +299,10 @@ local function UpdateNightmarishTask()
     end
     if #bits == 0 then
         nightmarishLabel:SetText(
-            "|cffd8b4feWeekly: " .. NIGHTMARISH_TITLE .. " — in progress|r")
+            "|cffd8b4feAstalor Weekly: " .. NIGHTMARISH_TITLE .. " — in progress|r")
     else
         nightmarishLabel:SetText(
-            "|cffd8b4feWeekly:|r " .. table.concat(bits, "  |cff666666·|r  "))
+            "|cffd8b4feAstalor Weekly:|r " .. table.concat(bits, "  |cff666666·|r  "))
     end
 end
 
@@ -328,10 +328,10 @@ local function UpdateMidnightDelves()
     end
     if #bits == 0 then
         midnightDelvesLabel:SetText(
-            "|cff7ed4ffWQ: " .. MIDNIGHT_DELVES_TITLE .. " — active|r")
+            "|cff7ed4ffWorld Quest: " .. MIDNIGHT_DELVES_TITLE .. " — active|r")
     else
         midnightDelvesLabel:SetText(
-            "|cff7ed4ffWQ:|r " .. table.concat(bits, "  |cff666666·|r  "))
+            "|cff7ed4ffWorld Quest:|r " .. table.concat(bits, "  |cff666666·|r  "))
     end
 end
 
@@ -364,7 +364,7 @@ local function UpdateDisplay()
     local remain = math.max(0, FULL_REWARD_CAP - total)
     if remain > 0 then
         preyFooterLabel:SetText(string.format(
-            "|cffffd700%d|r full-reward hunt%s remaining this week",
+            "|cffffd700%d|r hunt%s rewarding Preyseeker's Journey reputation remaining",
             remain, remain == 1 and "" or "s"))
     else
         preyFooterLabel:SetText("|cff00ff00Full weekly rewards claimed!|r")
@@ -424,13 +424,17 @@ local function BuildPreyContent(parent)
 
     MakeDivider(parent, -HEADER_H)
 
-    -- ── Active Hunt: UI-Journeys-Delve-Companion-button, no ring icon ─────────
-    local ACTIVE_H = 100
-    local ACTIVE_Y = -(HEADER_H + 20)
-    local TX       = PAD + 56   -- pushed right to clear card frame edge
+    -- ── Top row: Active Hunt (left) + Footer/Rewards (right), side-by-side ──
+    -- Aligned with the difficulty card row edges below.
+    local ACTIVE_H   = 100
+    local ACTIVE_Y   = -(HEADER_H + 20)
+    local TOP_GAP    = 8
+    local TOP_CARD_W = math.floor((availW - TOP_GAP) / 2)
+    local FOOT_CARD_W = availW - TOP_CARD_W - TOP_GAP
+    local TX         = 40   -- text left offset inside active card
 
     local activeCard = CreateFrame("Frame", nil, parent)
-    activeCard:SetSize(availW, ACTIVE_H)
+    activeCard:SetSize(TOP_CARD_W, ACTIVE_H)
     activeCard:SetPoint("TOPLEFT", parent, "TOPLEFT", PAD, ACTIVE_Y)
 
     local acBg = activeCard:CreateTexture(nil, "BACKGROUND")
@@ -483,7 +487,43 @@ local function BuildPreyContent(parent)
                       diffLabel   = diffLabel,   zoneLabel   = zoneLabel,
                       rewardLabel = rewardLabel }
 
-    -- Divider between active hunt and difficulty row
+    -- ── Footer card: sits to the right of the active hunt card on the top row
+    -- so the panel has two top cards in one row above the difficulty row.
+    local footCard = CreateFrame("Frame", nil, parent)
+    footCard:SetSize(FOOT_CARD_W, ACTIVE_H)
+    footCard:SetPoint("TOPLEFT", parent, "TOPLEFT", PAD + TOP_CARD_W + TOP_GAP, ACTIVE_Y)
+
+    local footBg = footCard:CreateTexture(nil, "BACKGROUND")
+    footBg:SetAtlas("UI-Journeys-Renown-Button", false)
+    footBg:SetAllPoints(footCard)
+
+    -- All three footer lines use a CENTER anchor so they remain visually
+    -- centered on the card regardless of which are visible.
+    preyFooterLabel = footCard:CreateFontString(nil, "OVERLAY")
+    preyFooterLabel:SetFont("Fonts\\MORPHEUS.TTF", 14, "")
+    preyFooterLabel:SetJustifyH("CENTER")
+    preyFooterLabel:SetWordWrap(true)
+    preyFooterLabel:SetPoint("CENTER", footCard, "CENTER", 0, 26)
+    preyFooterLabel:SetWidth(FOOT_CARD_W - 20)
+    preyFooterLabel:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
+    --preyFooterLabel:SetShadowColor(0, 0, 0, 0.6) ; preyFooterLabel:SetShadowOffset(1, -1)
+
+    nightmarishLabel = footCard:CreateFontString(nil, "OVERLAY")
+    nightmarishLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+    nightmarishLabel:SetJustifyH("CENTER")
+    nightmarishLabel:SetWordWrap(false)
+    nightmarishLabel:SetPoint("CENTER", footCard, "CENTER", 0, 0)
+    --nightmarishLabel:SetShadowColor(0, 0, 0, 0.6) ; nightmarishLabel:SetShadowOffset(1, -1)
+
+    midnightDelvesLabel = footCard:CreateFontString(nil, "OVERLAY")
+    midnightDelvesLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+    midnightDelvesLabel:SetJustifyH("CENTER")
+    midnightDelvesLabel:SetWordWrap(false)
+    midnightDelvesLabel:SetPoint("CENTER", footCard, "CENTER", 0, -26)
+    --midnightDelvesLabel:SetShadowColor(0, 0, 0, 0.6) ; midnightDelvesLabel:SetShadowOffset(1, -1)
+    midnightDelvesLabel:Hide()
+
+    -- Divider between top row and difficulty row
     local divY = ACTIVE_Y - ACTIVE_H - 8
     MakeDivider(parent, divY)
 
@@ -546,41 +586,6 @@ local function BuildPreyContent(parent)
         rows[diff] = row
     end
 
-    -- ── Footer: full-width UI-Journeys-Renown-Button, same height as active hunt ─
-    local footY    = ROW_Y - CARD_H - 10
-    MakeDivider(parent, footY)
-
-    local footCard = CreateFrame("Frame", nil, parent)
-    footCard:SetSize(availW, ACTIVE_H)
-    footCard:SetPoint("TOPLEFT", parent, "TOPLEFT", PAD, footY - 20)
-
-    local footBg = footCard:CreateTexture(nil, "BACKGROUND")
-    footBg:SetAtlas("UI-Journeys-Renown-Button", false)
-    footBg:SetAllPoints(footCard)
-
-    -- All three footer lines use a CENTER anchor so they remain visually
-    -- centered on the card regardless of which are visible.
-    preyFooterLabel = footCard:CreateFontString(nil, "OVERLAY")
-    preyFooterLabel:SetFont("Fonts\\MORPHEUS.TTF", 14, "")
-    preyFooterLabel:SetJustifyH("CENTER")
-    preyFooterLabel:SetPoint("CENTER", footCard, "CENTER", 0, 26)
-    preyFooterLabel:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
-    --preyFooterLabel:SetShadowColor(0, 0, 0, 0.6) ; preyFooterLabel:SetShadowOffset(1, -1)
-
-    nightmarishLabel = footCard:CreateFontString(nil, "OVERLAY")
-    nightmarishLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
-    nightmarishLabel:SetJustifyH("CENTER")
-    nightmarishLabel:SetWordWrap(false)
-    nightmarishLabel:SetPoint("CENTER", footCard, "CENTER", 0, 0)
-    --nightmarishLabel:SetShadowColor(0, 0, 0, 0.6) ; nightmarishLabel:SetShadowOffset(1, -1)
-
-    midnightDelvesLabel = footCard:CreateFontString(nil, "OVERLAY")
-    midnightDelvesLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
-    midnightDelvesLabel:SetJustifyH("CENTER")
-    midnightDelvesLabel:SetWordWrap(false)
-    midnightDelvesLabel:SetPoint("CENTER", footCard, "CENTER", 0, -26)
-    --midnightDelvesLabel:SetShadowColor(0, 0, 0, 0.6) ; midnightDelvesLabel:SetShadowOffset(1, -1)
-    midnightDelvesLabel:Hide()
 end
 
 --------------------------------------------------------------------------------
