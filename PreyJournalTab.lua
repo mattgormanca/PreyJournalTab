@@ -250,46 +250,29 @@ local function UpdateActiveHunt()
         activeSection.targetLabel:Show()
         activeSection.diffLabel:Show()
 
-        -- Visual rewards: icons + count overlay, then money text after the last icon.
-        if activeSection.rewardIcons then
+        -- Rewards line
+        if activeSection.rewardLabel then
             local items, money = GetHuntRewards(questID)
-            for i, slot in ipairs(activeSection.rewardIcons) do
-                local it = items[i]
-                if it and it.icon then
-                    slot.tex:SetTexture(it.icon)
-                    slot.tex:SetVertexColor(1, 1, 1)
-                    if it.quantity and it.quantity > 1 then
-                        slot.count:SetText(it.quantity)
-                    else
-                        slot.count:SetText("")
-                    end
-                    slot:Show()
-                else
-                    slot:Hide()
-                end
+            local parts = {}
+            for _, it in ipairs(items) do
+                local q = (it.quantity and it.quantity > 1) and ("x" .. it.quantity) or ""
+                table.insert(parts, "|cffffd700" .. it.name .. q .. "|r")
             end
             local moneyStr = FormatMoney(money)
-            if moneyStr then
-                activeSection.moneyLabel:SetText(moneyStr)
-                activeSection.moneyLabel:Show()
+            if moneyStr then table.insert(parts, moneyStr) end
+            if #parts > 0 then
+                activeSection.rewardLabel:SetText("Reward: " .. table.concat(parts, ", "))
             else
-                activeSection.moneyLabel:Hide()
+                activeSection.rewardLabel:SetText("Reward: |cff888888(loading…)|r")
             end
-            -- Fallback: if no rewards found at all, show a hint.
-            if #items == 0 and not moneyStr then
-                activeSection.moneyLabel:SetText("|cff888888(rewards loading…)|r")
-                activeSection.moneyLabel:Show()
-            end
+            activeSection.rewardLabel:Show()
         end
     else
         activeSection.noneLabel:Show()
         activeSection.targetLabel:Hide()
         activeSection.diffLabel:Hide()
         activeSection.zoneLabel:Hide()
-        if activeSection.rewardIcons then
-            for _, slot in ipairs(activeSection.rewardIcons) do slot:Hide() end
-        end
-        if activeSection.moneyLabel then activeSection.moneyLabel:Hide() end
+        if activeSection.rewardLabel then activeSection.rewardLabel:Hide() end
     end
 end
 
@@ -483,47 +466,22 @@ local function BuildPreyContent(parent)
     zoneLabel:SetTextColor(0.78, 0.70, 0.52)
     zoneLabel:Hide()
 
-    -- Visual reward icons row, anchored just under the difficulty label.
-    local ICON_SIZE   = 24
-    local ICON_GAP    = 4
-    local ICON_Y      = -64
-    local rewardIcons = {}
-    for i = 1, MAX_REWARD_ICONS do
-        local slot = CreateFrame("Frame", nil, activeCard)
-        slot:SetSize(ICON_SIZE, ICON_SIZE)
-        slot:SetPoint("TOPLEFT", activeCard, "TOPLEFT",
-                      TX + (i - 1) * (ICON_SIZE + ICON_GAP), ICON_Y)
-
-        local tex = slot:CreateTexture(nil, "ARTWORK")
-        tex:SetAllPoints(slot)
-        tex:SetTexCoord(0.07, 0.93, 0.07, 0.93)  -- trim default item-icon border
-
-        local border = slot:CreateTexture(nil, "OVERLAY")
-        border:SetPoint("TOPLEFT",     slot, "TOPLEFT",     -1, 1)
-        border:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT",  1, -1)
-        border:SetColorTexture(0, 0, 0, 0.6)
-        border:SetDrawLayer("BACKGROUND", -1)
-
-        local count = slot:CreateFontString(nil, "OVERLAY")
-        count:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
-        count:SetPoint("BOTTOMRIGHT", slot, "BOTTOMRIGHT", -1, 1)
-        count:SetTextColor(1, 1, 1)
-
-        slot.tex   = tex
-        slot.count = count
-        slot:Hide()
-        rewardIcons[i] = slot
-    end
-
-    local moneyLabel = activeCard:CreateFontString(nil, "OVERLAY")
-    moneyLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
-    moneyLabel:SetPoint("LEFT", rewardIcons[MAX_REWARD_ICONS], "RIGHT", 10, 0)
-    moneyLabel:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
-    moneyLabel:Hide()
+    -- Reward text line, bounded to the card so it wraps within the active hunt
+    -- card rather than overflowing into the panel below.
+    local rewardLabel = activeCard:CreateFontString(nil, "OVERLAY")
+    rewardLabel:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
+    rewardLabel:SetJustifyH("LEFT")
+    rewardLabel:SetJustifyV("TOP")
+    rewardLabel:SetWordWrap(true)
+    rewardLabel:SetMaxLines(2)
+    rewardLabel:SetPoint("TOPLEFT",     activeCard, "TOPLEFT",     TX,   -66)
+    rewardLabel:SetPoint("BOTTOMRIGHT", activeCard, "BOTTOMRIGHT", -12,  6)
+    rewardLabel:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
+    rewardLabel:Hide()
 
     activeSection = { noneLabel   = noneLabel,   targetLabel = targetLabel,
                       diffLabel   = diffLabel,   zoneLabel   = zoneLabel,
-                      rewardIcons = rewardIcons, moneyLabel  = moneyLabel }
+                      rewardLabel = rewardLabel }
 
     -- Divider between active hunt and difficulty row
     local divY = ACTIVE_Y - ACTIVE_H - 8
@@ -600,10 +558,12 @@ local function BuildPreyContent(parent)
     footBg:SetAtlas("UI-Journeys-Renown-Button", false)
     footBg:SetAllPoints(footCard)
 
+    -- All three footer lines use a CENTER anchor so they remain visually
+    -- centered on the card regardless of which are visible.
     preyFooterLabel = footCard:CreateFontString(nil, "OVERLAY")
     preyFooterLabel:SetFont("Fonts\\MORPHEUS.TTF", 14, "")
-    preyFooterLabel:SetPoint("TOP", footCard, "TOP", 0, -14)
     preyFooterLabel:SetJustifyH("CENTER")
+    preyFooterLabel:SetPoint("CENTER", footCard, "CENTER", 0, 26)
     preyFooterLabel:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
     --preyFooterLabel:SetShadowColor(0, 0, 0, 0.6) ; preyFooterLabel:SetShadowOffset(1, -1)
 
@@ -611,16 +571,14 @@ local function BuildPreyContent(parent)
     nightmarishLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
     nightmarishLabel:SetJustifyH("CENTER")
     nightmarishLabel:SetWordWrap(false)
-    nightmarishLabel:SetPoint("TOPLEFT",  footCard, "TOPLEFT",  12, -40)
-    nightmarishLabel:SetPoint("TOPRIGHT", footCard, "TOPRIGHT", -12, -40)
+    nightmarishLabel:SetPoint("CENTER", footCard, "CENTER", 0, 0)
     --nightmarishLabel:SetShadowColor(0, 0, 0, 0.6) ; nightmarishLabel:SetShadowOffset(1, -1)
 
     midnightDelvesLabel = footCard:CreateFontString(nil, "OVERLAY")
     midnightDelvesLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
     midnightDelvesLabel:SetJustifyH("CENTER")
     midnightDelvesLabel:SetWordWrap(false)
-    midnightDelvesLabel:SetPoint("BOTTOMLEFT",  footCard, "BOTTOMLEFT",  12, 12)
-    midnightDelvesLabel:SetPoint("BOTTOMRIGHT", footCard, "BOTTOMRIGHT", -12, 12)
+    midnightDelvesLabel:SetPoint("CENTER", footCard, "CENTER", 0, -26)
     --midnightDelvesLabel:SetShadowColor(0, 0, 0, 0.6) ; midnightDelvesLabel:SetShadowOffset(1, -1)
     midnightDelvesLabel:Hide()
 end
