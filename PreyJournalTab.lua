@@ -434,7 +434,7 @@ local function BuildPreyContent(parent)
     local divY = ACTIVE_Y - ACTIVE_H - 8
     MakeDivider(parent, divY)
 
-    -- ── Difficulty row: 3 UI-Journeys-Delve-Card panes, text centered ─────────
+    -- ── Difficulty row: 3 UI-Journeys-Renown-Button panes, text centered ─────
     local CARD_H = 106
     local GAP    = 8
     local CARD_W = math.floor((availW - GAP * 2) / 3)
@@ -450,7 +450,7 @@ local function BuildPreyContent(parent)
         card:SetPoint("TOPLEFT", parent, "TOPLEFT", xOff, ROW_Y)
 
         local cardBg = card:CreateTexture(nil, "BACKGROUND")
-        cardBg:SetAtlas("UI-Journeys-Delve-Card", false)
+        cardBg:SetAtlas("UI-Journeys-Renown-Button", false)
         cardBg:SetAllPoints(card)
 
         local tint = card:CreateTexture(nil, "BACKGROUND", nil, 1)
@@ -495,7 +495,7 @@ local function BuildPreyContent(parent)
         rows[diff] = row
     end
 
-    -- ── Footer: full-width UI-Journeys-Delve-Card, same height as active hunt ──
+    -- ── Footer: full-width UI-Journeys-Renown-Button, same height as active hunt ─
     local footY    = ROW_Y - CARD_H - 10
     MakeDivider(parent, footY)
 
@@ -504,7 +504,7 @@ local function BuildPreyContent(parent)
     footCard:SetPoint("TOPLEFT", parent, "TOPLEFT", PAD, footY - 20)
 
     local footBg = footCard:CreateTexture(nil, "BACKGROUND")
-    footBg:SetAtlas("UI-Journeys-Delve-Card", false)
+    footBg:SetAtlas("UI-Journeys-Renown-Button", false)
     footBg:SetAllPoints(footCard)
 
     preyFooterLabel = footCard:CreateFontString(nil, "OVERLAY")
