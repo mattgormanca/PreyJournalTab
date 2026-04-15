@@ -15,7 +15,7 @@ local MAX_HUNTS          = { Normal = 4, Hard = 4, Nightmare = 4 }
 local FULL_REWARD_CAP    = 4
 local DIFFICULTIES       = { "Normal", "Hard", "Nightmare" }
 local NIGHTMARISH_TITLE  = "A Nightmarish Task"
-local MIDNIGHT_DELVES_TITLE = "Midnight: Delves"
+local MIDNIGHT_PREY_TITLE = "Midnight: Prey"
 local MAX_REWARD_ICONS   = 4
 
 local COLORS = {
@@ -135,11 +135,11 @@ local function ScanQuestLogForActiveHunt()
     return nil, nil, nil, nil
 end
 
--- Locate the weekly "Midnight: Delves" world quest. World quests are tasks.
-local function ScanMidnightDelves()
+-- Locate the weekly "Midnight: Prey" world quest. World quests are tasks.
+local function ScanMidnightPrey()
     for i = 1, C_QuestLog.GetNumQuestLogEntries() do
         local info = C_QuestLog.GetInfo(i)
-        if info and not info.isHeader and info.title == MIDNIGHT_DELVES_TITLE then
+        if info and not info.isHeader and info.title == MIDNIGHT_PREY_TITLE then
             local qid        = info.questID
             local isComplete = C_QuestLog.IsComplete and C_QuestLog.IsComplete(qid)
             local objectives = (C_QuestLog.GetQuestObjectives
@@ -222,7 +222,7 @@ local preyPanel       -- content frame parented to EncounterJournal
 local rows            -- difficulty row widget table
 local preyFooterLabel
 local nightmarishLabel    -- weekly "A Nightmarish Task" status line
-local midnightDelvesLabel -- weekly "Midnight: Delves" world quest status line
+local midnightPreyLabel -- weekly "Midnight: Prey" world quest status line
 local activeSection
 local preyTabButton   -- the tab button we add to EJ
 local preyTabIndex    -- which tab number we are
@@ -306,18 +306,18 @@ local function UpdateNightmarishTask()
     end
 end
 
-local function UpdateMidnightDelves()
-    if not midnightDelvesLabel then return end
-    local t = ScanMidnightDelves()
+local function UpdateMidnightPrey()
+    if not midnightPreyLabel then return end
+    local t = ScanMidnightPrey()
     if not t.active then
-        midnightDelvesLabel:SetText("")
-        midnightDelvesLabel:Hide()
+        midnightPreyLabel:SetText("")
+        midnightPreyLabel:Hide()
         return
     end
-    midnightDelvesLabel:Show()
+    midnightPreyLabel:Show()
     if t.isComplete then
-        midnightDelvesLabel:SetText(
-            "|cff00ff00World Quest: " .. MIDNIGHT_DELVES_TITLE .. " — ready to turn in!|r")
+        midnightPreyLabel:SetText(
+            "|cff00ff00World Quest: " .. MIDNIGHT_PREY_TITLE .. " — ready to turn in!|r")
         return
     end
     local bits = {}
@@ -327,10 +327,10 @@ local function UpdateMidnightDelves()
         end
     end
     if #bits == 0 then
-        midnightDelvesLabel:SetText(
-            "|cff7ed4ffWorld Quest: " .. MIDNIGHT_DELVES_TITLE .. " — active|r")
+        midnightPreyLabel:SetText(
+            "|cff7ed4ffWorld Quest: " .. MIDNIGHT_PREY_TITLE .. " — active|r")
     else
-        midnightDelvesLabel:SetText(
+        midnightPreyLabel:SetText(
             "|cff7ed4ffWorld Quest:|r " .. table.concat(bits, "  |cff666666·|r  "))
     end
 end
@@ -371,7 +371,7 @@ local function UpdateDisplay()
     end
 
     UpdateNightmarishTask()
-    UpdateMidnightDelves()
+    UpdateMidnightPrey()
 end
 
 --------------------------------------------------------------------------------
@@ -515,13 +515,13 @@ local function BuildPreyContent(parent)
     nightmarishLabel:SetPoint("CENTER", footCard, "CENTER", 0, 0)
     --nightmarishLabel:SetShadowColor(0, 0, 0, 0.6) ; nightmarishLabel:SetShadowOffset(1, -1)
 
-    midnightDelvesLabel = footCard:CreateFontString(nil, "OVERLAY")
-    midnightDelvesLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
-    midnightDelvesLabel:SetJustifyH("CENTER")
-    midnightDelvesLabel:SetWordWrap(false)
-    midnightDelvesLabel:SetPoint("CENTER", footCard, "CENTER", 0, -26)
-    --midnightDelvesLabel:SetShadowColor(0, 0, 0, 0.6) ; midnightDelvesLabel:SetShadowOffset(1, -1)
-    midnightDelvesLabel:Hide()
+    midnightPreyLabel = footCard:CreateFontString(nil, "OVERLAY")
+    midnightPreyLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+    midnightPreyLabel:SetJustifyH("CENTER")
+    midnightPreyLabel:SetWordWrap(false)
+    midnightPreyLabel:SetPoint("CENTER", footCard, "CENTER", 0, -26)
+    --midnightPreyLabel:SetShadowColor(0, 0, 0, 0.6) ; midnightPreyLabel:SetShadowOffset(1, -1)
+    midnightPreyLabel:Hide()
 
     -- Divider between top row and difficulty row
     local divY = ACTIVE_Y - ACTIVE_H - 8
@@ -910,19 +910,19 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "QUEST_ACCEPTED" then
         C_Timer.After(0, UpdateActiveHunt)
         C_Timer.After(0, UpdateNightmarishTask)
-        C_Timer.After(0, UpdateMidnightDelves)
+        C_Timer.After(0, UpdateMidnightPrey)
 
     elseif event == "QUEST_REMOVED" then
         C_Timer.After(0, UpdateActiveHunt)
         C_Timer.After(0, UpdateNightmarishTask)
-        C_Timer.After(0, UpdateMidnightDelves)
+        C_Timer.After(0, UpdateMidnightPrey)
 
     elseif event == "QUEST_LOG_UPDATE" or event == "QUEST_DATA_LOAD_RESULT" then
         -- Only refresh if our panel is visible — these events fire often.
         if preyPanel and preyPanel:IsShown() then
             UpdateActiveHunt()
             UpdateNightmarishTask()
-            UpdateMidnightDelves()
+            UpdateMidnightPrey()
         end
 
     elseif event == "QUEST_TURNED_IN" then
@@ -935,7 +935,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         end
         C_Timer.After(0, UpdateActiveHunt)
         C_Timer.After(0, UpdateNightmarishTask)
-        C_Timer.After(0, UpdateMidnightDelves)
+        C_Timer.After(0, UpdateMidnightPrey)
     end
 end)
 
