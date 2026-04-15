@@ -466,7 +466,7 @@ local function BuildPreyContent(parent)
         lbl:SetPoint("TOP", card, "TOP", 0, -14)
         lbl:SetText(diff)
         lbl:SetTextColor(c.r, c.g, c.b)
-        lbl:SetShadowColor(0, 0, 0, 0.7) ; lbl:SetShadowOffset(1, -1)
+        --lbl:SetShadowColor(0, 0, 0, 0.7) ; lbl:SetShadowOffset(1, -1)
         row.label = lbl
 
         -- Count: FRIZQT__ 16pt, centered
