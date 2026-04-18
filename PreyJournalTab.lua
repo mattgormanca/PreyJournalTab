@@ -815,6 +815,7 @@ SetupEncounterJournalTab = function()
     preyPanel:SetPoint("TOPLEFT",     EncounterJournal, "TOPLEFT",     4, -60)
     preyPanel:SetPoint("BOTTOMRIGHT", EncounterJournal, "BOTTOMRIGHT", -4,  6)
     preyPanel:SetFrameLevel(EncounterJournal:GetFrameLevel() + 50)
+    preyPanel:SetFrameStrata("HIGH")   -- above all MEDIUM-strata EJ content (e.g. Traveler's Log sidebar)
     preyPanel:EnableMouse(true)  -- block clicks from passing through to native EJ panels
 
     -- Inner border ring (EncounterJournalInset replica, confirmed from panelscan)
