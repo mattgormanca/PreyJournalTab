@@ -567,30 +567,29 @@ local function BuildPreyContent(parent)
         local lbl = card:CreateFontString(nil, "OVERLAY")
         lbl:SetFont("Fonts\\MORPHEUS.TTF", 22, "")
         lbl:SetJustifyH("CENTER")
-        lbl:SetPoint("CENTER", card, "TOP", 0, -24)
+        lbl:SetPoint("CENTER", card, "CENTER", 0, 28)
         lbl:SetText(diff)
         lbl:SetTextColor(c.r, c.g, c.b)
-        --lbl:SetShadowColor(0, 0, 0, 0.7) ; lbl:SetShadowOffset(1, -1)
         row.label = lbl
 
         -- Count: FRIZQT__ 16pt, centered
         local cnt = card:CreateFontString(nil, "OVERLAY")
         cnt:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
         cnt:SetJustifyH("CENTER")
-        cnt:SetPoint("TOP", card, "TOP", 0, -42)
+        cnt:SetPoint("CENTER", card, "CENTER", 0, 2)
         cnt:SetTextColor(1, 1, 1)
         row.countLabel = cnt
 
-        -- Buttons centered at bottom of card
+        -- Buttons centered within the card
         local sub = MakeBtn(card, "-", 24, 22)
-        sub:SetPoint("BOTTOM", card, "BOTTOM", -16, 8)
+        sub:SetPoint("CENTER", card, "CENTER", -16, -24)
         sub:SetScript("OnClick", function()
             SetCount(diff, GetCount(diff) - 1) ; UpdateDisplay()
         end)
         row.subBtn = sub
 
         local add = MakeBtn(card, "+", 24, 22)
-        add:SetPoint("BOTTOM", card, "BOTTOM", 16, 8)
+        add:SetPoint("CENTER", card, "CENTER", 16, -24)
         add:SetScript("OnClick", function()
             SetCount(diff, GetCount(diff) + 1) ; UpdateDisplay()
         end)
