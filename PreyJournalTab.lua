@@ -815,6 +815,7 @@ SetupEncounterJournalTab = function()
     preyPanel:SetPoint("TOPLEFT",     EncounterJournal, "TOPLEFT",     4, -60)
     preyPanel:SetPoint("BOTTOMRIGHT", EncounterJournal, "BOTTOMRIGHT", -4,  6)
     preyPanel:SetFrameLevel(EncounterJournal:GetFrameLevel() + 50)
+    preyPanel:EnableMouse(true)  -- block clicks from passing through to native EJ panels
 
     -- Inner border ring (EncounterJournalInset replica, confirmed from panelscan)
     local tl = preyPanel:CreateTexture(nil, "BORDER")
