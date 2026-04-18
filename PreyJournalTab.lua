@@ -161,6 +161,8 @@ local function ScanNightmarishTask()
         local info = C_QuestLog.GetInfo(i)
         if info and not info.isHeader and info.title == NIGHTMARISH_TITLE then
             local qid        = info.questID
+            -- Cache the questID so we can detect post-turnin state via IsQuestFlaggedCompleted.
+            if PreyJournalDB then PreyJournalDB.nightmarishTaskQuestID = qid end
             local isComplete = C_QuestLog.IsComplete and C_QuestLog.IsComplete(qid)
             local objectives = (C_QuestLog.GetQuestObjectives
                                 and C_QuestLog.GetQuestObjectives(qid)) or {}
@@ -171,6 +173,12 @@ local function ScanNightmarishTask()
                 objectives = objectives,
             }
         end
+    end
+    -- Not in the quest log — check if it was already turned in this week.
+    local savedQID = PreyJournalDB and PreyJournalDB.nightmarishTaskQuestID
+    if savedQID and C_QuestLog.IsQuestFlaggedCompleted
+            and C_QuestLog.IsQuestFlaggedCompleted(savedQID) then
+        return { accepted = true, questID = savedQID, isComplete = true, turnedIn = true, objectives = {} }
     end
     return { accepted = false }
 end
@@ -285,8 +293,13 @@ local function UpdateNightmarishTask()
         return
     end
     if t.isComplete then
-        nightmarishLabel:SetText(
-            "|cff00ff00Astalor Weekly: " .. NIGHTMARISH_TITLE .. " — ready to turn in!|r")
+        if t.turnedIn then
+            nightmarishLabel:SetText(
+                "|cff00ff00Astalor Weekly: " .. NIGHTMARISH_TITLE .. " — completed this week|r")
+        else
+            nightmarishLabel:SetText(
+                "|cff00ff00Astalor Weekly: " .. NIGHTMARISH_TITLE .. " — ready to turn in!|r")
+        end
         return
     end
     -- Blizzard's objective.text already contains "N/M ..." progress, so use it
