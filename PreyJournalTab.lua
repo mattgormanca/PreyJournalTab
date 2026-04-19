@@ -720,6 +720,13 @@ local function TryHookEJ()
         -- EncounterJournalLootJournalTab briefly visible) inflate the count.
         C_Timer.After(0, function()
             SetupEncounterJournalTab()
+            -- Re-show our tab every time EJ opens. Blizzard's tab management
+            -- may have hidden it (e.g. by resetting frame.numTabs to their count
+            -- and iterating over tabs, excluding ours).
+            if preyTabButton then
+                preyTabButton:Show()
+                PanelTemplates_SetNumTabs(EncounterJournal, preyTabIndex)
+            end
             if wasOnPreyTab and preyPanel then
                 ShowPreyTab()
             end
@@ -855,8 +862,11 @@ SetupEncounterJournalTab = function()
             end
 
             if preyTabIndex == expectedIndex then
-                -- Index is correct — just rewire
+                -- Index is correct — rewire and re-register tab count so Blizzard's
+                -- PanelTemplates_SetTab loop includes our button.
                 isSetup = true
+                preyTabButton:Show()
+                PanelTemplates_SetNumTabs(EncounterJournal, preyTabIndex)
                 preyTabButton:SetScript("OnClick", ShowPreyTab)
                 if _G["EncounterJournal_ShowTab"] then
                     hooksecurefunc("EncounterJournal_ShowTab", HidePreyTabFromClick)
@@ -908,6 +918,7 @@ SetupEncounterJournalTab = function()
     preyTabButton:SetID(preyTabIndex)
     PanelTemplates_TabResize(preyTabButton, 0)
     PanelTemplates_DeselectTab(preyTabButton)   -- ensure it starts in unselected visual state
+    preyTabButton:Show()                        -- PanelTabButtonTemplate may default to hidden
 
     if anchorTab then
         preyTabButton:SetPoint("LEFT", anchorTab, "RIGHT", 4, 0)
@@ -1112,8 +1123,33 @@ SLASH_PREYJOURNALTAB2 = "/pjt"
 SlashCmdList["PREYJOURNALTAB"] = function(msg)
     local cmd = strtrim(msg):lower()
 
+    -- ── debug: dump setup state to chat ─────────────────────────────────────
+    if cmd == "debug" then
+        local function yn(v) return v and "|cff00ff00yes|r" or "|cffff4040no|r" end
+        local function val(v) return v ~= nil and tostring(v) or "|cffff4040nil|r" end
+        print("|cffffff00[PreyJournalTab] Debug state:|r")
+        print("  ejHookRegistered : " .. yn(ejHookRegistered))
+        print("  isSetup          : " .. yn(isSetup))
+        print("  EncounterJournal : " .. yn(EncounterJournal ~= nil))
+        print("  preyPanel        : " .. yn(preyPanel ~= nil))
+        print("  preyPanel shown  : " .. yn(preyPanel and preyPanel:IsShown()))
+        print("  preyTabButton    : " .. yn(preyTabButton ~= nil))
+        print("  preyTabButton shown : " .. yn(preyTabButton and preyTabButton:IsShown()))
+        print("  preyTabIndex     : " .. val(preyTabIndex))
+        print("  wasOnPreyTab     : " .. yn(wasOnPreyTab))
+        print("  rows built       : " .. yn(rows ~= nil))
+        if EncounterJournal then
+            print("  EJ shown         : " .. yn(EncounterJournal:IsShown()))
+            print("  EJ numTabs       : " .. val(EncounterJournal.numTabs))
+            local tabs = GetAllEJTabs()
+            print("  visible EJ tabs  : " .. #tabs)
+            for _, t in ipairs(tabs) do
+                print(string.format("    [%d] %s", t.index, t.text))
+            end
+        end
+
     -- ── reset ────────────────────────────────────────────────────────────────
-    if cmd == "reset" then
+    elseif cmd == "reset" then
         PreyJournalDB.counts = { Normal = 0, Hard = 0, Nightmare = 0 }
         if preyPanel and preyPanel:IsShown() then UpdateDisplay() end
         PJTLog("CMD", "Counts reset by player")
