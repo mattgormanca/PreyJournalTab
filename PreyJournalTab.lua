@@ -1051,89 +1051,6 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     end
 end)
 
---------------------------------------------------------------------------------
--- API scan — intercept C_EncounterJournal calls to discover journey data fields
---------------------------------------------------------------------------------
-
-local pjt_scan_active = false
-local pjt_scan_saved  = {}   -- original C_EncounterJournal functions while scan is live
-
--- Serialise one value to a readable string (tables expanded to {k=v,...}).
-local function PJT_SerialiseValue(v)
-    if type(v) ~= "table" then return tostring(v) end
-    local parts = {}
-    for k2, v2 in pairs(v) do
-        parts[#parts + 1] = tostring(k2) .. "=" .. tostring(v2)
-    end
-    return "{" .. table.concat(parts, ", ") .. "}"
-end
-
-local function PJT_StartScan()
-    if pjt_scan_active then
-        print("|cffff6060[PreyJournalTab]|r Scan already active — /preyhunts scan stop to end it.")
-        return
-    end
-    pjt_scan_active = true
-    pjt_scan_saved  = {}
-
-    local count = 0
-    for name, fn in pairs(C_EncounterJournal) do
-        if type(fn) == "function" then
-            pjt_scan_saved[name] = fn
-            -- Capture name and original in locals so each closure is independent.
-            local fname  = name
-            local fnorig = fn
-            C_EncounterJournal[fname] = function(...)
-                -- Serialise arguments
-                local argParts = {}
-                for _, a in ipairs({...}) do
-                    argParts[#argParts + 1] = PJT_SerialiseValue(a)
-                end
-                local argStr = table.concat(argParts, ", ")
-
-                -- Call the real function
-                local results = { fnorig(...) }
-
-                -- Serialise return values
-                local retParts = {}
-                for _, r in ipairs(results) do
-                    retParts[#retParts + 1] = PJT_SerialiseValue(r)
-                end
-                local retStr = #retParts > 0 and table.concat(retParts, ", ") or "(nil)"
-
-                local line = string.format(
-                    "C_EncounterJournal.%s(%s) → %s", fname, argStr, retStr)
-                PJTLog("SCAN", line)
-                print("|cffffff00[PJT-SCAN]|r " .. line)
-
-                return unpack(results)
-            end
-            count = count + 1
-        end
-    end
-
-    PJTLog("SCAN", "Scan started — hooked " .. count .. " C_EncounterJournal functions")
-    print(string.format(
-        "|cffff6060[PreyJournalTab]|r Scan active (%d hooks). " ..
-        "Navigate to Traveler's Log \226\134\146 click the |cffd700Prey: Season 1|r card. " ..
-        "Then |cffffff00/preyhunts scan stop|r.",
-        count))
-end
-
-local function PJT_StopScan()
-    if not pjt_scan_active then
-        print("|cffff6060[PreyJournalTab]|r No scan is active.")
-        return
-    end
-    for name, fn in pairs(pjt_scan_saved) do
-        C_EncounterJournal[name] = fn
-    end
-    pjt_scan_saved  = {}
-    pjt_scan_active = false
-    PJTLog("SCAN", "Scan stopped")
-    print("|cffff6060[PreyJournalTab]|r Scan stopped. Run |cffffff00/preyhunts log|r to review captured calls.")
-end
-
 -- Dump all regions (textures + fontstrings) of a frame recursively up to maxDepth
 -- into PreyJournalDB.log.
 local function LogFrameRegions(frame, label, depth, maxDepth)
@@ -1339,13 +1256,6 @@ SlashCmdList["PREYJOURNALTAB"] = function(msg)
                 print("|cffff6060[PreyJournalTab]|r No Prey journey found in GetJourneys(0)")
             end
         end
-
-    -- ── scan: intercept C_EncounterJournal to capture journey API calls ─────────
-    elseif cmd == "scan start" or cmd == "scan" then
-        PJT_StartScan()
-
-    elseif cmd == "scan stop" then
-        PJT_StopScan()
 
     -- ── default: open EJ on our tab ──────────────────────────────────────────
     else
