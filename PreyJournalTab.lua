@@ -720,15 +720,22 @@ local function TryHookEJ()
         -- EncounterJournalLootJournalTab briefly visible) inflate the count.
         C_Timer.After(0, function()
             SetupEncounterJournalTab()
-            -- Re-show our tab every time EJ opens. Blizzard's tab management
-            -- may have hidden it (e.g. by resetting frame.numTabs to their count
-            -- and iterating over tabs, excluding ours).
             if preyTabButton then
                 preyTabButton:Show()
-                PanelTemplates_SetNumTabs(EncounterJournal, preyTabIndex)
             end
             if wasOnPreyTab and preyPanel then
                 ShowPreyTab()
+            end
+        end)
+        -- Secondary pass: re-show the button 0.5 s later in case Blizzard's
+        -- deferred tab-management code hides it after our first pass.
+        C_Timer.After(0.5, function()
+            if preyTabButton then
+                preyTabButton:Show()
+                print("|cffff6060[PreyJournalTab]|r tab re-asserted idx=" .. tostring(preyTabIndex)
+                    .. " shown=" .. tostring(preyTabButton:IsShown()))
+            else
+                print("|cffff6060[PreyJournalTab]|r 0.5s: preyTabButton is nil — setup may have failed")
             end
         end)
     end)
@@ -834,15 +841,15 @@ SetupEncounterJournalTab = function()
     -- first-time path recreates it at the correct position.
     if _G["PreyJournalTabPanel"] then
         preyPanel = _G["PreyJournalTabPanel"]
-        local n = 1
-        while _G["EncounterJournalTab" .. n] do
-            local t = _G["EncounterJournalTab" .. n]
-            if (t:GetText() or "") == "Prey Hunts" then
-                preyTabButton = t
-                preyTabIndex  = n
+        -- Scan EJ children directly rather than walking EncounterJournalTab{n}
+        -- globals. Blizzard's own tabs don't follow the Tab{n} naming, so
+        -- EncounterJournalTab1 is nil and a numeric while-loop misses our tab.
+        for _, child in ipairs({ EncounterJournal:GetChildren() }) do
+            if child.GetText and (child:GetText() or "") == "Prey Hunts" then
+                preyTabButton = child
+                preyTabIndex  = child:GetID()
                 break
             end
-            n = n + 1
         end
 
         if preyTabButton then
@@ -862,16 +869,15 @@ SetupEncounterJournalTab = function()
             end
 
             if preyTabIndex == expectedIndex then
-                -- Index is correct — rewire and re-register tab count so Blizzard's
-                -- PanelTemplates_SetTab loop includes our button.
+                -- Index is correct — rewire.
                 isSetup = true
                 preyTabButton:Show()
-                PanelTemplates_SetNumTabs(EncounterJournal, preyTabIndex)
                 preyTabButton:SetScript("OnClick", ShowPreyTab)
                 if _G["EncounterJournal_ShowTab"] then
                     hooksecurefunc("EncounterJournal_ShowTab", HidePreyTabFromClick)
                 end
                 EncounterJournal:HookScript("OnHide", HidePreyTab)
+                print("|cffff6060[PreyJournalTab]|r Reload: reused tab at idx=" .. preyTabIndex)
                 PJTLog("SETUP", "Reused existing tab on reload, index=" .. preyTabIndex)
                 return
             else
@@ -879,16 +885,18 @@ SetupEncounterJournalTab = function()
                 -- and repositions the button correctly.
                 preyTabButton:ClearAllPoints()
                 preyTabButton:Hide()
-                preyTabButton = nil
-                preyTabIndex  = nil
+                local staleIdx = preyTabIndex
+                preyTabButton  = nil
+                preyTabIndex   = nil
                 PJTLog("SETUP", string.format(
                     "Stale tab at index %d (expected %d), recreating",
-                    preyTabIndex or 0, expectedIndex))
+                    staleIdx, expectedIndex))
             end
         end
     end
 
     isSetup = true
+    print("|cffff6060[PreyJournalTab]|r Setup running (first time)")
     PJTLog("SETUP", "SetupEncounterJournalTab running (first time)")
 
     -- ── 1. Find existing tabs, excluding any leftover Prey Hunts tab ─────────
@@ -919,6 +927,10 @@ SetupEncounterJournalTab = function()
     PanelTemplates_TabResize(preyTabButton, 0)
     PanelTemplates_DeselectTab(preyTabButton)   -- ensure it starts in unselected visual state
     preyTabButton:Show()                        -- PanelTabButtonTemplate may default to hidden
+    print(string.format("|cffff6060[PreyJournalTab]|r Tab button created: idx=%d anchor=%s existingTabs=%d",
+        preyTabIndex,
+        anchorTab and (anchorTab:GetText() or "?") or "NONE (using fallback position)",
+        lastTabNum))
 
     if anchorTab then
         preyTabButton:SetPoint("LEFT", anchorTab, "RIGHT", 4, 0)
