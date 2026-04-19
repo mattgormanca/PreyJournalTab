@@ -235,7 +235,8 @@ local activeSection
 local preyTabButton   -- the tab button we add to EJ
 local preyTabIndex    -- which tab number we are
 local preyJourneyLevelLabel  -- FontString: "Level X" on the Prey Season journey card
-local preyJourneyBar         -- StatusBar: clips fill automatically within bar bounds
+local preyJourneyBarFill     -- Texture: fill, parented to a clip frame so it can't overflow
+local preyJourneyBarMaxW     -- number: max fill pixel width
 
 
 --------------------------------------------------------------------------------
@@ -374,11 +375,17 @@ local function UpdatePreyJourneyCard()
     else
         preyJourneyLevelLabel:SetText("Level --")
     end
-    if preyJourneyBar then
+    if preyJourneyBarFill then
         if prog and maxProg and maxProg > 0 then
-            preyJourneyBar:SetValue(prog / maxProg)
+            local w = math.min(math.floor((prog / maxProg) * preyJourneyBarMaxW), preyJourneyBarMaxW)
+            if w > 0 then
+                preyJourneyBarFill:SetWidth(w)
+                preyJourneyBarFill:Show()
+            else
+                preyJourneyBarFill:Hide()
+            end
         else
-            preyJourneyBar:SetValue(0)
+            preyJourneyBarFill:Hide()
         end
     end
 end
@@ -666,16 +673,26 @@ local function BuildPreyContent(parent)
     jBarBg:SetSize(BAR_W, BAR_H)
     jBarBg:SetPoint("BOTTOM", jCard, "BOTTOM", 0, 16)
 
-    preyJourneyBar = CreateFrame("StatusBar", nil, jCard)
-    preyJourneyBar:SetSize(BAR_W, BAR_H)
-    preyJourneyBar:SetPoint("LEFT", jBarBg, "LEFT", 0, 0)
-    preyJourneyBar:SetStatusBarAtlas("UI-Journeys-renown-progressbar-fill")
-    preyJourneyBar:SetMinMaxValues(0, 1)
-    preyJourneyBar:SetValue(0)
+    -- Clip frame: fill texture is parented here so it cannot visually overflow
+    -- the bar bounds regardless of what SetWidth value is calculated.
+    local jBarClip = CreateFrame("Frame", nil, jCard)
+    jBarClip:SetSize(BAR_W, BAR_H)
+    jBarClip:SetPoint("LEFT", jBarBg, "LEFT", 0, 0)
+    jBarClip:SetClipsChildren(true)
 
-    local jBarFrame = preyJourneyBar:CreateTexture(nil, "OVERLAY")
+    preyJourneyBarFill = jBarClip:CreateTexture(nil, "ARTWORK", nil, -1)
+    preyJourneyBarFill:SetAtlas("UI-Journeys-renown-progressbar-fill", false)
+    preyJourneyBarFill:SetHeight(BAR_H)
+    preyJourneyBarFill:SetWidth(1)
+    preyJourneyBarFill:SetPoint("LEFT", jBarClip, "LEFT", 0, 0)
+    preyJourneyBarFill:Hide()
+
+    local jBarFrame = jCard:CreateTexture(nil, "ARTWORK")
     jBarFrame:SetAtlas("UI-Journeys-renown-progressbar-frame", false)
-    jBarFrame:SetAllPoints(preyJourneyBar)
+    jBarFrame:SetSize(BAR_W, BAR_H)
+    jBarFrame:SetPoint("LEFT", jBarBg, "LEFT", 0, 0)
+
+    preyJourneyBarMaxW = BAR_W
     UpdatePreyJourneyCard()
 
 end
@@ -940,11 +957,12 @@ SetupEncounterJournalTab = function()
     rt:SetPoint("TOPRIGHT",    preyPanel, "TOPRIGHT",    0, -6)
     rt:SetPoint("BOTTOMRIGHT", preyPanel, "BOTTOMRIGHT", 0,  6)
 
+    -- ── 4. Wire tab clicks (before BuildPreyContent so the tab is always
+    --        clickable even if content build encounters an error)
+    preyTabButton:SetScript("OnClick", ShowPreyTab)
+
     preyPanel:Hide()
     BuildPreyContent(preyPanel)
-
-    -- ── 4. Wire tab clicks ───────────────────────────────────────────────────
-    preyTabButton:SetScript("OnClick", ShowPreyTab)
 
     -- Hide our panel (and clear restore flag) when another EJ tab is clicked
     for _, entry in ipairs(existingTabs) do
@@ -1261,4 +1279,30 @@ SlashCmdList["PREYJOURNALTAB"] = function(msg)
             print("|cffff6060[PreyJournalTab]|r Could not load the Adventure Guide.")
         end
     end
+end
+
+--------------------------------------------------------------------------------
+-- Test export (only active when loaded by the unit test runner)
+--------------------------------------------------------------------------------
+
+if _G.__PJT_TESTING then
+    _G.PreyJournalTabTesting = {
+        -- Pure logic — no WoW API required
+        ParsePreyTitle          = ParsePreyTitle,
+        GetWeeklyResetTimestamp = GetWeeklyResetTimestamp,
+        -- Database helpers (require InitDB called first)
+        InitDB                  = InitDB,
+        GetCount                = GetCount,
+        SetCount                = SetCount,
+        GetTotalCompleted       = GetTotalCompleted,
+        -- Quest-log scanners (require C_QuestLog stub)
+        ScanQuestLogForActiveHunt = ScanQuestLogForActiveHunt,
+        ScanNightmarishTask     = ScanNightmarishTask,
+        ScanMidnightPrey        = ScanMidnightPrey,
+        -- Journey data (require C_EncounterJournal stub)
+        GetPreyJourneyData      = GetPreyJourneyData,
+        -- Expose DB reference so tests can read/write it
+        GetDB                   = function() return PreyJournalDB end,
+        SetDB                   = function(t) PreyJournalDB = t end,
+    }
 end
