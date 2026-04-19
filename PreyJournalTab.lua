@@ -235,8 +235,7 @@ local activeSection
 local preyTabButton   -- the tab button we add to EJ
 local preyTabIndex    -- which tab number we are
 local preyJourneyLevelLabel  -- FontString: "Level X" on the Prey Season journey card
-local preyJourneyBarFill     -- Texture: fill width controlled by progress ratio
-local preyJourneyBarMaxW     -- number: max fill pixel width
+local preyJourneyBar         -- StatusBar: clips fill automatically within bar bounds
 
 
 --------------------------------------------------------------------------------
@@ -360,7 +359,8 @@ local function GetPreyJourneyData()
     for _, jID in ipairs(journeys) do
         local info = C_EncounterJournal.GetJourneyInfo and C_EncounterJournal.GetJourneyInfo(jID)
         if info and info.name and info.name:find("Prey") then
-            return info.level, info.progress, info.maxProgress
+            local level = info.level or info.currentLevel or info.journeyLevel
+            return level, info.progress, info.maxProgress
         end
     end
     return nil, nil, nil
@@ -374,11 +374,11 @@ local function UpdatePreyJourneyCard()
     else
         preyJourneyLevelLabel:SetText("Level --")
     end
-    if preyJourneyBarFill then
+    if preyJourneyBar then
         if prog and maxProg and maxProg > 0 then
-            preyJourneyBarFill:SetWidth(math.floor((prog / maxProg) * preyJourneyBarMaxW))
+            preyJourneyBar:SetValue(prog / maxProg)
         else
-            preyJourneyBarFill:SetWidth(0)
+            preyJourneyBar:SetValue(0)
         end
     end
 end
@@ -666,18 +666,16 @@ local function BuildPreyContent(parent)
     jBarBg:SetSize(BAR_W, BAR_H)
     jBarBg:SetPoint("BOTTOM", jCard, "BOTTOM", 0, 16)
 
-    preyJourneyBarFill = jCard:CreateTexture(nil, "ARTWORK", nil, -1)
-    preyJourneyBarFill:SetAtlas("UI-Journeys-renown-progressbar-fill", false)
-    preyJourneyBarFill:SetHeight(BAR_H)
-    preyJourneyBarFill:SetWidth(0)
-    preyJourneyBarFill:SetPoint("LEFT", jBarBg, "LEFT", 0, 0)
+    preyJourneyBar = CreateFrame("StatusBar", nil, jCard)
+    preyJourneyBar:SetSize(BAR_W, BAR_H)
+    preyJourneyBar:SetPoint("LEFT", jBarBg, "LEFT", 0, 0)
+    preyJourneyBar:SetStatusBarAtlas("UI-Journeys-renown-progressbar-fill")
+    preyJourneyBar:SetMinMaxValues(0, 1)
+    preyJourneyBar:SetValue(0)
 
-    local jBarFrame = jCard:CreateTexture(nil, "ARTWORK")
+    local jBarFrame = preyJourneyBar:CreateTexture(nil, "OVERLAY")
     jBarFrame:SetAtlas("UI-Journeys-renown-progressbar-frame", false)
-    jBarFrame:SetSize(BAR_W, BAR_H)
-    jBarFrame:SetPoint("LEFT", jBarBg, "LEFT", 0, 0)
-
-    preyJourneyBarMaxW = BAR_W
+    jBarFrame:SetAllPoints(preyJourneyBar)
     UpdatePreyJourneyCard()
 
 end
@@ -1218,6 +1216,28 @@ SlashCmdList["PREYJOURNALTAB"] = function(msg)
     elseif cmd == "clearlog" then
         PreyJournalDB.log = {}
         print("|cffff6060[PreyJournalTab]|r Log cleared.")
+
+    elseif cmd == "journeydump" then
+        if not C_EncounterJournal.GetJourneys then
+            print("|cffff6060[PreyJournalTab]|r GetJourneys API not available")
+        else
+            local journeys = C_EncounterJournal.GetJourneys(0)
+            if not journeys then
+                print("|cffff6060[PreyJournalTab]|r GetJourneys(0) returned nil")
+            else
+                for _, jID in ipairs(journeys) do
+                    local info = C_EncounterJournal.GetJourneyInfo and C_EncounterJournal.GetJourneyInfo(jID)
+                    if info and info.name and info.name:find("Prey") then
+                        print("|cffffff00[PreyJournalTab]|r Journey info for '" .. info.name .. "':")
+                        for k, v in pairs(info) do
+                            print("  " .. tostring(k) .. " = " .. tostring(v))
+                        end
+                        return
+                    end
+                end
+                print("|cffff6060[PreyJournalTab]|r No Prey journey found in GetJourneys(0)")
+            end
+        end
 
     -- ── default: open EJ on our tab ──────────────────────────────────────────
     else
