@@ -1,6 +1,6 @@
 # PreyJournalTab
 
-**Version:** 1.1.0  
+**Version:** 1.4.0  
 **Interface:** 12.0.0.1 (World of Warcraft: Midnight)  
 **SavedVariables:** `PreyJournalDB`
 
@@ -38,17 +38,27 @@ A **Prey Hunts** tab appears as the last tab on the Adventure Guide window, posi
 
 When the Prey Hunts tab is selected, the Adventure Guide's inner content area is replaced with a tracking panel. The outer window border, title bar, close button, and all other tabs remain fully visible and functional.
 
-The panel contains three sections:
+The panel is laid out top-to-bottom as follows:
 
-#### Active Hunt
-A card at the top of the panel showing your currently active Prey Hunt contract, if one is in progress. It displays:
+#### Top Row (side by side)
+
+Two cards sit side by side at the top of the panel:
+
+**Active Hunt** (left card) — your currently active Prey Hunt contract, if one is in progress. Displays:
 - **Target name** — the name of the prey you are currently hunting (e.g. *Knight-Errant Bloodshatter*)
 - **Difficulty** — Normal, Hard, or Nightmare, colour-coded green / orange / red
 - **Zone** — the zone the hunt is taking place in, if it can be resolved from the quest log
+- **Reward** — the reward for this contract (gold / items), if available from the quest log
 
 If no hunt is in progress, the card shows *"No hunt in progress"*.
 
+**Status** (right card) — weekly reward and companion quest status:
+- **Full-reward hunts remaining** — how many of the 4 weekly full-reward hunts you have left (awards 1,000 Preyseeker's Journey progress each). Shows *"Full weekly rewards claimed!"* once all four are done.
+- **Astalor Weekly** — status of *A Nightmarish Task*: not accepted / in progress (with objective counts) / ready to turn in / completed this week.
+- **Midnight: Prey** — status of the *Midnight: Prey* world quest: active (with objectives) or not active.
+
 #### Weekly Progress
+
 Three cards, one per difficulty, showing how many hunts you have completed this week out of the maximum four:
 
 | Difficulty | Colour   | Max per week |
@@ -57,10 +67,16 @@ Three cards, one per difficulty, showing how many hunts you have completed this 
 | Hard       | Orange   | 4            |
 | Nightmare  | Red      | 4            |
 
-Each card displays a `−` and `+` button for manual adjustment, in case the auto-tracking misses a completion.
+Each card displays a `−` and `+` button for manual adjustment, in case the auto-tracking misses a completion. The difficulty label, count, and buttons are all centred within the card.
 
-#### Footer
-A status line at the bottom of the panel showing how many of the **4 full-reward hunts** remain for the week (the account-wide cap that awards 1,000 Preyseeker's Journey progress per hunt). Once all four are claimed it shows *"Full weekly rewards claimed!"*.
+#### Prey Season Journey Card
+
+A card below the difficulty cards styled after the native Traveler's Log journey cards. It displays:
+- **Title** — "Prey: Season 1" in EJ gold
+- **Level** — your current Preyseeker's Journey level (e.g. *Level 6*)
+- **Progress bar** — your XP progress within the current level, using the same `UI-Journeys-renown-progressbar` atlases as the native card
+
+> **Note:** Level and progress data require the correct `C_EncounterJournal` API field names to be confirmed in-game. If the level shows *"Level --"* and the bar is empty, use `/preyhunts journeydump` or `/preyhunts scan start` to identify the correct fields (see Commands below).
 
 ---
 
@@ -74,6 +90,9 @@ A status line at the bottom of the panel showing how many of the **4 full-reward
 | `/preyhunts inspect` | Dumps all immediate children of the EncounterJournal frame to chat (for debugging) |
 | `/preyhunts panelscan` | Deep-dumps all textures and font strings from currently-visible EJ content frames to the persistent log (for atlas research — navigate to the tab you want to scan first) |
 | `/preyhunts suggestinspect` | Deep-dumps the EncounterJournalSuggestFrame region tree to the persistent log (run while on the Suggested Content tab) |
+| `/preyhunts journeydump` | Prints all key/value fields from the Prey journey info struct to chat — use this to identify the correct field names for level and progress |
+| `/preyhunts scan start` | Starts an API intercept scan: wraps every `C_EncounterJournal.*` function to log its arguments and return values. Navigate to Traveler's Log and click the Prey: Season 1 card while the scan is active. |
+| `/preyhunts scan stop` | Stops the API scan and restores all original functions |
 | `/preyhunts log` | Prints the last 20 entries from the persistent log to chat |
 | `/preyhunts clearlog` | Clears the persistent log |
 
@@ -97,6 +116,14 @@ This approach is future-proof — it matches any target name across all four Mid
 
 The addon also registers `QUEST_ACCEPTED` and `QUEST_REMOVED` events to refresh the **Active Hunt** card whenever a quest is accepted or abandoned, so the card stays current without needing the panel to be reopened.
 
+### Astalor Weekly Detection
+
+The *A Nightmarish Task* quest is tracked across its full lifecycle:
+
+- **In progress** — objectives are read from the quest log and displayed with completion counts.
+- **Ready to turn in** — shown in green when all objectives are met.
+- **Completed this week** — the quest ID is cached in `PreyJournalDB` when first seen. After turnin, `C_QuestLog.IsQuestFlaggedCompleted` is polled against the cached ID so the card correctly shows *"completed this week"* even after the quest leaves the log.
+
 ---
 
 ## Weekly Reset
@@ -119,6 +146,7 @@ Logged events include:
 - Manual count resets
 - Setup lifecycle events (hook registration, setup execution)
 - Navigation via slash command
+- API scan call intercepts (`SCAN` category)
 
 ---
 
@@ -134,6 +162,8 @@ The Adventure Guide (`EncounterJournal`) is loaded on demand in Midnight — it 
 
 In all cases, setup is **deferred to the first `OnShow` event** on `EncounterJournal`. Within that handler, execution is further deferred by one tick via `C_Timer.After(0, ...)` so that Blizzard finishes showing and hiding its own tabs before the addon scans for them. Without this deferral, transiently-visible tabs (such as `EncounterJournalLootJournalTab`) can inflate the tab count and cause the Prey Hunts tab to be created at the wrong index. Setup only runs when the EJ is actually visible on screen.
 
+The tab button's `OnClick` handler is wired **before** `BuildPreyContent` runs, so the tab is always clickable even if content build encounters an error.
+
 ### Tab Injection
 
 The tab button is created as `EncounterJournalTab{N}` using `PanelTabButtonTemplate`, where `N` is one more than the count of currently-visible EJ tabs. It is anchored with `SetPoint("LEFT", anchorTab, "RIGHT", 4, 0)`. `PanelTemplates_SetNumTabs` and `PanelTemplates_TabResize` are called to register it with the panel system.
@@ -144,7 +174,7 @@ On UI reload, the addon detects previously-created frames via the `PreyJournalTa
 
 ### Content Isolation
 
-`preyPanel` is anchored to fill the EJ content area (`TOPLEFT` + `4, -60` to `BOTTOMRIGHT` + `-4, 6` relative to `EncounterJournal`) and runs at frame level `EJ + 50`. Because it sits above Blizzard's content at a higher frame level, no native EJ children need to be hidden — the panel simply overlays them.
+`preyPanel` is anchored to fill the EJ content area (`TOPLEFT` + `4, -60` to `BOTTOMRIGHT` + `-4, 6` relative to `EncounterJournal`). It is assigned `SetFrameStrata("HIGH")` so it sits above all `MEDIUM`-strata EJ content — including deeply-nested frames such as the Traveler's Log left-hand selection menu, which accumulate frame levels through nesting and would otherwise show through. `EnableMouse(true)` is set on the panel so all mouse events are consumed and cannot pass through to native EJ panels beneath.
 
 When the Prey Hunts tab is selected (`ShowPreyTab`):
 
@@ -154,22 +184,43 @@ When the Prey Hunts tab is selected (`ShowPreyTab`):
 
 When another tab is selected, `HidePreyTab` fires (hooked via `HookScript` on each existing tab and `hooksecurefunc` on `EncounterJournal_ShowTab`). It hides `preyPanel` and deselects our tab button. When triggered by an explicit click on another tab, `wasOnPreyTab` is also cleared.
 
+### Journey Card Progress Bar
+
+The Prey Season journey progress bar uses the same `UI-Journeys-renown-progressbar-*` atlas textures as the native Traveler's Log cards. The fill texture is parented to a `SetClipsChildren(true)` clip frame so it cannot visually overflow the bar bounds regardless of the computed fill width. The `Hide()`/`Show()` pattern is used in place of `SetWidth(0)` to avoid zero-width rendering ambiguity.
+
 ### SavedVariables Schema
 
 ```lua
 PreyJournalDB = {
-    lastReset = <unix timestamp of most recent weekly reset>,
+    lastReset              = <unix timestamp of most recent weekly reset>,
+    nightmarishTaskQuestID = <questID cached on first sight, for post-turnin detection>,
     counts = {
         Normal    = <0–4>,
         Hard      = <0–4>,
         Nightmare = <0–4>,
     },
-    log = {  -- all events including panelscan and suggestinspect output
+    log = {  -- all events including panelscan, suggestinspect, and scan output
         "[YYYY-MM-DD HH:MM:SS][CATEGORY] message",
         ...
     },
 }
 ```
+
+Log categories: `SETUP`, `TAB`, `QUEST`, `CMD`, `NAV`, `PANEL`, `SUGGEST`, `SCAN`.
+
+---
+
+## Unit Tests
+
+A lightweight test suite lives in `tests/` and exercises the pure-logic functions without requiring an in-game client. To run:
+
+```
+lua tests/run.lua
+```
+
+Requires a plain Lua interpreter (5.1–5.4 or LuaJIT). Install via [Scoop](https://scoop.sh) (`scoop install lua`) or from [lua.org](https://www.lua.org/download.html).
+
+The suite covers: `ParsePreyTitle`, `GetWeeklyResetTimestamp`, database count clamping, `ScanNightmarishTask` (including post-turnin detection), `ScanQuestLogForActiveHunt`, and `GetPreyJourneyData` — all running against WoW API stubs defined in `tests/stubs.lua`.
 
 ---
 
@@ -178,6 +229,7 @@ PreyJournalDB = {
 - **Zone detection for active hunts is not always available.** Prey hunt contracts are normal quests, not world quests, so `C_TaskQuest.GetQuestZoneID()` returns nil for them. Zone is only shown if a companion task quest with "Prey" in the title is found in the quest log.
 - **The `−`/`+` buttons are the fallback.** If the game client does not fire `QUEST_TURNED_IN` for a given hunt completion (e.g. if the quest was completed before the addon loaded), the counter can be manually corrected.
 - **Weekly reset time is hardcoded to US/EU Tuesday 15:00 UTC.** Players on Oceanic or other regions with different reset times may see early resets.
+- **Journey level and progress may not populate.** The `C_EncounterJournal` API field names for journey level and XP are unconfirmed for Midnight. If the journey card shows *"Level --"* and an empty bar, use `/preyhunts scan start`, click the Prey: Season 1 card in the Traveler's Log, then `/preyhunts scan stop` and `/preyhunts log` to identify the correct field names.
 
 ---
 
