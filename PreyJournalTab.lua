@@ -234,6 +234,9 @@ local midnightPreyLabel -- weekly "Midnight: Prey" world quest status line
 local activeSection
 local preyTabButton   -- the tab button we add to EJ
 local preyTabIndex    -- which tab number we are
+local preyJourneyLevelLabel  -- FontString: "Level X" on the Prey Season journey card
+local preyJourneyBarFill     -- Texture: fill width controlled by progress ratio
+local preyJourneyBarMaxW     -- number: max fill pixel width
 
 
 --------------------------------------------------------------------------------
@@ -348,6 +351,38 @@ local function UpdateMidnightPrey()
     end
 end
 
+-- Attempt to read Prey Season journey level and progress via C_EncounterJournal.
+-- Returns level, progress, maxProgress or nil, nil, nil if API unavailable.
+local function GetPreyJourneyData()
+    if not C_EncounterJournal.GetJourneys then return nil, nil, nil end
+    local journeys = C_EncounterJournal.GetJourneys(0)
+    if not journeys then return nil, nil, nil end
+    for _, jID in ipairs(journeys) do
+        local info = C_EncounterJournal.GetJourneyInfo and C_EncounterJournal.GetJourneyInfo(jID)
+        if info and info.name and info.name:find("Prey") then
+            return info.level, info.progress, info.maxProgress
+        end
+    end
+    return nil, nil, nil
+end
+
+local function UpdatePreyJourneyCard()
+    if not preyJourneyLevelLabel then return end
+    local level, prog, maxProg = GetPreyJourneyData()
+    if level then
+        preyJourneyLevelLabel:SetText("Level " .. level)
+    else
+        preyJourneyLevelLabel:SetText("Level --")
+    end
+    if preyJourneyBarFill then
+        if prog and maxProg and maxProg > 0 then
+            preyJourneyBarFill:SetWidth(math.floor((prog / maxProg) * preyJourneyBarMaxW))
+        else
+            preyJourneyBarFill:SetWidth(0)
+        end
+    end
+end
+
 local function UpdateDisplay()
     if not rows then return end
     local total = GetTotalCompleted()
@@ -385,6 +420,7 @@ local function UpdateDisplay()
 
     UpdateNightmarishTask()
     UpdateMidnightPrey()
+    UpdatePreyJourneyCard()
 end
 
 --------------------------------------------------------------------------------
@@ -597,6 +633,52 @@ local function BuildPreyContent(parent)
 
         rows[diff] = row
     end
+
+    -- ── Prey Season Journey card ─────────────────────────────────────────────
+    local JOURNEY_H = 120
+    local JOURNEY_W = 374
+    local JOURNEY_Y = ROW_Y - CARD_H - 12   -- 12px gap below difficulty cards
+
+    local jCard = CreateFrame("Frame", nil, parent)
+    jCard:SetSize(JOURNEY_W, JOURNEY_H)
+    jCard:SetPoint("TOP", parent, "TOP", 0, JOURNEY_Y)
+
+    local jBg = jCard:CreateTexture(nil, "BACKGROUND")
+    jBg:SetAtlas("UI-Journeys-Prey-Button", false)
+    jBg:SetAllPoints(jCard)
+
+    local jTitle = jCard:CreateFontString(nil, "OVERLAY")
+    jTitle:SetFont("Fonts\\FRIZQT__.TTF", 14, "")
+    jTitle:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
+    jTitle:SetText("Prey: Season 1")
+    jTitle:SetPoint("TOPLEFT", jCard, "TOPLEFT", 20, -18)
+
+    preyJourneyLevelLabel = jCard:CreateFontString(nil, "OVERLAY")
+    preyJourneyLevelLabel:SetFont("Fonts\\FRIZQT__.TTF", 14, "")
+    preyJourneyLevelLabel:SetTextColor(0.9, 0.9, 0.9)
+    preyJourneyLevelLabel:SetText("Level --")
+    preyJourneyLevelLabel:SetPoint("TOPLEFT", jTitle, "BOTTOMLEFT", 0, -6)
+
+    -- Progress bar: BG + fill (ARTWORK below frame overlay) + frame overlay on top
+    local BAR_W, BAR_H = 320, 14
+    local jBarBg = jCard:CreateTexture(nil, "BACKGROUND", nil, 1)
+    jBarBg:SetAtlas("UI-Journeys-renown-progressbar-BG", false)
+    jBarBg:SetSize(BAR_W, BAR_H)
+    jBarBg:SetPoint("BOTTOM", jCard, "BOTTOM", 0, 16)
+
+    preyJourneyBarFill = jCard:CreateTexture(nil, "ARTWORK", nil, -1)
+    preyJourneyBarFill:SetAtlas("UI-Journeys-renown-progressbar-fill", false)
+    preyJourneyBarFill:SetHeight(BAR_H)
+    preyJourneyBarFill:SetWidth(0)
+    preyJourneyBarFill:SetPoint("LEFT", jBarBg, "LEFT", 0, 0)
+
+    local jBarFrame = jCard:CreateTexture(nil, "ARTWORK")
+    jBarFrame:SetAtlas("UI-Journeys-renown-progressbar-frame", false)
+    jBarFrame:SetSize(BAR_W, BAR_H)
+    jBarFrame:SetPoint("LEFT", jBarBg, "LEFT", 0, 0)
+
+    preyJourneyBarMaxW = BAR_W
+    UpdatePreyJourneyCard()
 
 end
 
