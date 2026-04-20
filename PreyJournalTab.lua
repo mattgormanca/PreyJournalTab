@@ -705,6 +705,7 @@ local chromeFrames     = {}
 local isSetup          = false
 local ejHookRegistered = false
 local wasOnPreyTab     = false  -- restore prey panel when EJ reopens
+local discardingTab    = false  -- guards OnHide re-show during intentional button discard
 
 -- Forward declarations — both are defined below but referenced by TryHookEJ
 local SetupEncounterJournalTab
@@ -727,15 +728,16 @@ local function TryHookEJ()
                 ShowPreyTab()
             end
         end)
-        -- Secondary pass: re-show the button 0.5 s later in case Blizzard's
-        -- deferred tab-management code hides it after our first pass.
+        -- Secondary pass: re-show the button 0.5 s later as a safety net.
+        -- The OnHide hook below is the primary defence; this catches cases
+        -- where Blizzard hides the button before the hook is wired up.
         C_Timer.After(0.5, function()
             if preyTabButton then
                 preyTabButton:Show()
-                print("|cffff6060[PreyJournalTab]|r tab re-asserted idx=" .. tostring(preyTabIndex)
+                PJTLog("TAB", "0.5s re-assert idx=" .. tostring(preyTabIndex)
                     .. " shown=" .. tostring(preyTabButton:IsShown()))
             else
-                print("|cffff6060[PreyJournalTab]|r 0.5s: preyTabButton is nil — setup may have failed")
+                PJTLog("TAB", "0.5s: preyTabButton nil — setup may have failed")
             end
         end)
     end)
@@ -883,8 +885,10 @@ SetupEncounterJournalTab = function()
             else
                 -- Index is stale — clear references so first-time setup reruns
                 -- and repositions the button correctly.
+                discardingTab = true
                 preyTabButton:ClearAllPoints()
                 preyTabButton:Hide()
+                discardingTab = false
                 local staleIdx = preyTabIndex
                 preyTabButton  = nil
                 preyTabIndex   = nil
@@ -895,7 +899,6 @@ SetupEncounterJournalTab = function()
         end
     end
 
-    isSetup = true
     print("|cffff6060[PreyJournalTab]|r Setup running (first time)")
     PJTLog("SETUP", "SetupEncounterJournalTab running (first time)")
 
@@ -927,6 +930,7 @@ SetupEncounterJournalTab = function()
     PanelTemplates_TabResize(preyTabButton, 0)
     PanelTemplates_DeselectTab(preyTabButton)   -- ensure it starts in unselected visual state
     preyTabButton:Show()                        -- PanelTabButtonTemplate may default to hidden
+    isSetup = true  -- set after button exists so a mid-setup error allows retry
     print(string.format("|cffff6060[PreyJournalTab]|r Tab button created: idx=%d anchor=%s existingTabs=%d",
         preyTabIndex,
         anchorTab and (anchorTab:GetText() or "?") or "NONE (using fallback position)",
@@ -986,6 +990,16 @@ SetupEncounterJournalTab = function()
 
     preyPanel:Hide()
     BuildPreyContent(preyPanel)
+
+    -- Re-show our tab button if anything external hides it (e.g. Blizzard's
+    -- deferred EJ tab management). discardingTab prevents re-showing during
+    -- the intentional hide in the stale-index recovery path.
+    preyTabButton:HookScript("OnHide", function(self)
+        if not discardingTab then
+            PJTLog("TAB", "preyTabButton hidden by external code — re-showing")
+            self:Show()
+        end
+    end)
 
     -- Hide our panel (and clear restore flag) when another EJ tab is clicked
     for _, entry in ipairs(existingTabs) do
