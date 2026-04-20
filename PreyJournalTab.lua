@@ -16,7 +16,6 @@ local FULL_REWARD_CAP    = 4
 local DIFFICULTIES       = { "Normal", "Hard", "Nightmare" }
 local NIGHTMARISH_TITLE  = "A Nightmarish Task"
 local MIDNIGHT_PREY_TITLE = "Midnight: Prey"
-local MAX_REWARD_ICONS   = 4
 
 local COLORS = {
     Normal    = { r = 0.4, g = 0.8, b = 0.4 },
@@ -24,16 +23,7 @@ local COLORS = {
     Nightmare = { r = 0.8, g = 0.2, b = 0.2 },
 }
 
--- EJ-matching gold
-local GOLD = { 1.0, 0.82, 0.0 }
-
--- Content panel dimensions (sits centered inside the EJ frame)
-local PANEL_W  = 420
-local PANEL_H  = 310
-local PAD      = 16
-local ROW_H    = 32
-local ACTIVE_H = 54
-local FOOTER_H = 28
+local GOLD = { r = 1.0, g = 0.82, b = 0.0 }  -- EJ-matching gold
 
 --------------------------------------------------------------------------------
 -- SavedVariables helpers
@@ -228,7 +218,7 @@ end
 
 local preyPanel       -- content frame parented to EncounterJournal
 local rows            -- difficulty row widget table
-local preyFooterLabel
+local rewardCapLabel
 local nightmarishLabel    -- weekly "A Nightmarish Task" status line
 local midnightPreyLabel -- weekly "Midnight: Prey" world quest status line
 local activeSection
@@ -418,11 +408,11 @@ local function UpdateDisplay()
 
     local remain = math.max(0, FULL_REWARD_CAP - total)
     if remain > 0 then
-        preyFooterLabel:SetText(string.format(
+        rewardCapLabel:SetText(string.format(
             "|cffffd700%d|r hunt%s rewarding Preyseeker's Journey reputation remaining",
             remain, remain == 1 and "" or "s"))
     else
-        preyFooterLabel:SetText("|cff00ff00Full weekly rewards claimed!|r")
+        rewardCapLabel:SetText("|cff00ff00Full weekly rewards claimed!|r")
     end
 
     UpdateNightmarishTask()
@@ -474,7 +464,7 @@ local function BuildPreyContent(parent)
     -- ── Header ────────────────────────────────────────────────────────────────
     local title = parent:CreateFontString(nil, "OVERLAY")
     title:SetFont("Fonts\\FRIZQT__.TTF", 18, "")
-    title:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
+    title:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
     title:SetText("Prey Hunts")
     title:SetPoint("TOPLEFT", parent, "TOPLEFT", PAD, -12)
 
@@ -497,8 +487,6 @@ local function BuildPreyContent(parent)
     acBg:SetAtlas("UI-Journeys-Renown-Button", false)
     acBg:SetAllPoints(activeCard)
 
-    local ahLabel = nil -- removed
-
     local noneLabel = activeCard:CreateFontString(nil, "OVERLAY")
     noneLabel:SetFont("Fonts\\MORPHEUS.TTF", 16, "")
     noneLabel:SetJustifyH("CENTER")
@@ -511,7 +499,6 @@ local function BuildPreyContent(parent)
     targetLabel:SetJustifyH("LEFT")
     targetLabel:SetPoint("TOPLEFT", activeCard, "TOPLEFT", TX, -22)
     targetLabel:SetTextColor(0.98, 0.92, 0.72)
-    --targetLabel:SetShadowColor(0, 0, 0, 0.6) ; targetLabel:SetShadowOffset(1, -1)
     targetLabel:Hide()
 
     local diffLabel = activeCard:CreateFontString(nil, "OVERLAY")
@@ -536,7 +523,7 @@ local function BuildPreyContent(parent)
     rewardLabel:SetMaxLines(2)
     rewardLabel:SetPoint("TOPLEFT",     activeCard, "TOPLEFT",     TX,   -66)
     rewardLabel:SetPoint("BOTTOMRIGHT", activeCard, "BOTTOMRIGHT", -12,  6)
-    rewardLabel:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
+    rewardLabel:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
     rewardLabel:Hide()
 
     activeSection = { noneLabel   = noneLabel,   targetLabel = targetLabel,
@@ -555,28 +542,25 @@ local function BuildPreyContent(parent)
 
     -- All three footer lines use a CENTER anchor so they remain visually
     -- centered on the card regardless of which are visible.
-    preyFooterLabel = footCard:CreateFontString(nil, "OVERLAY")
-    preyFooterLabel:SetFont("Fonts\\MORPHEUS.TTF", 14, "")
-    preyFooterLabel:SetJustifyH("CENTER")
-    preyFooterLabel:SetWordWrap(true)
-    preyFooterLabel:SetPoint("CENTER", footCard, "CENTER", 0, 26)
-    preyFooterLabel:SetWidth(FOOT_CARD_W - 20)
-    preyFooterLabel:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
-    --preyFooterLabel:SetShadowColor(0, 0, 0, 0.6) ; preyFooterLabel:SetShadowOffset(1, -1)
+    rewardCapLabel = footCard:CreateFontString(nil, "OVERLAY")
+    rewardCapLabel:SetFont("Fonts\\MORPHEUS.TTF", 14, "")
+    rewardCapLabel:SetJustifyH("CENTER")
+    rewardCapLabel:SetWordWrap(true)
+    rewardCapLabel:SetPoint("CENTER", footCard, "CENTER", 0, 26)
+    rewardCapLabel:SetWidth(FOOT_CARD_W - 20)
+    rewardCapLabel:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
 
     nightmarishLabel = footCard:CreateFontString(nil, "OVERLAY")
     nightmarishLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
     nightmarishLabel:SetJustifyH("CENTER")
     nightmarishLabel:SetWordWrap(false)
     nightmarishLabel:SetPoint("CENTER", footCard, "CENTER", 0, 0)
-    --nightmarishLabel:SetShadowColor(0, 0, 0, 0.6) ; nightmarishLabel:SetShadowOffset(1, -1)
 
     midnightPreyLabel = footCard:CreateFontString(nil, "OVERLAY")
     midnightPreyLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
     midnightPreyLabel:SetJustifyH("CENTER")
     midnightPreyLabel:SetWordWrap(false)
     midnightPreyLabel:SetPoint("CENTER", footCard, "CENTER", 0, -26)
-    --midnightPreyLabel:SetShadowColor(0, 0, 0, 0.6) ; midnightPreyLabel:SetShadowOffset(1, -1)
     midnightPreyLabel:Hide()
 
     -- Divider between top row and difficulty row
@@ -656,7 +640,7 @@ local function BuildPreyContent(parent)
 
     local jTitle = jCard:CreateFontString(nil, "OVERLAY")
     jTitle:SetFont("Fonts\\FRIZQT__.TTF", 14, "")
-    jTitle:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
+    jTitle:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
     jTitle:SetText("Prey: Season 1")
     jTitle:SetPoint("TOPLEFT", jCard, "TOPLEFT", 20, -18)
 
@@ -701,7 +685,6 @@ end
 -- Show / hide our tab
 --------------------------------------------------------------------------------
 
-local chromeFrames     = {}
 local isSetup          = false
 local ejHookRegistered = false
 local wasOnPreyTab     = false  -- restore prey panel when EJ reopens
@@ -879,7 +862,6 @@ SetupEncounterJournalTab = function()
                     hooksecurefunc("EncounterJournal_ShowTab", HidePreyTabFromClick)
                 end
                 EncounterJournal:HookScript("OnHide", HidePreyTab)
-                print("|cffff6060[PreyJournalTab]|r Reload: reused tab at idx=" .. preyTabIndex)
                 PJTLog("SETUP", "Reused existing tab on reload, index=" .. preyTabIndex)
                 return
             else
@@ -899,7 +881,6 @@ SetupEncounterJournalTab = function()
         end
     end
 
-    print("|cffff6060[PreyJournalTab]|r Setup running (first time)")
     PJTLog("SETUP", "SetupEncounterJournalTab running (first time)")
 
     -- ── 1. Find existing tabs, excluding any leftover Prey Hunts tab ─────────
@@ -931,10 +912,6 @@ SetupEncounterJournalTab = function()
     PanelTemplates_DeselectTab(preyTabButton)   -- ensure it starts in unselected visual state
     preyTabButton:Show()                        -- PanelTabButtonTemplate may default to hidden
     isSetup = true  -- set after button exists so a mid-setup error allows retry
-    print(string.format("|cffff6060[PreyJournalTab]|r Tab button created: idx=%d anchor=%s existingTabs=%d",
-        preyTabIndex,
-        anchorTab and (anchorTab:GetText() or "?") or "NONE (using fallback position)",
-        lastTabNum))
 
     if anchorTab then
         preyTabButton:SetPoint("LEFT", anchorTab, "RIGHT", 4, 0)
@@ -1092,7 +1069,6 @@ end)
 -- into PreyJournalDB.log.
 local function LogFrameRegions(frame, label, depth, maxDepth)
     if not frame or depth > maxDepth then return end
-    local name = frame:GetName() or "(unnamed)"
 
     -- Regions on this frame
     for _, region in ipairs({ frame:GetRegions() }) do
@@ -1224,7 +1200,6 @@ SlashCmdList["PREYJOURNALTAB"] = function(msg)
         -- Candidate content frames: scan all direct EJ children that are
         -- currently SHOWN, large (>200px wide), and not our own preyPanel.
         -- This captures whichever panel Blizzard is rendering right now.
-        local ejW, ejH = EncounterJournal:GetSize()
         for _, child in ipairs({ EncounterJournal:GetChildren() }) do
             if child ~= preyPanel and child:IsShown() then
                 local cw, ch = child:GetSize()
