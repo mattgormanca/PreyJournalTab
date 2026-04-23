@@ -1,4 +1,4 @@
-## Interface: 120001
+## Interface: 120005
 ## Title: PreyJournalTab
 ## Notes: Adds a Prey Hunts tracking tab to the Adventure Guide
 ## Author: Claude
